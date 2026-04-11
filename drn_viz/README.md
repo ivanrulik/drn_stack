@@ -74,6 +74,8 @@ cd /home/ivanrulik/code/ros2_ws
 ./run_viz.sh start
 ```
 
+`run_viz.sh` resets PX4 SITL parameter files by default before startup so stale QGroundControl setup prompts (such as transmitter/radio setup) do not carry over between runs. It also disables PX4 failure-detector attitude checks (`FD_FAIL_R=0`, `FD_FAIL_P=0`) in SITL by default to avoid false startup roll/pitch failures and applies the same values at runtime through the PX4 MAVLink shell. To keep existing PX4 parameters use `RESET_PX4_PARAMS=0 ./run_viz.sh start`; to keep failure-detector attitude checks enabled use `DISABLE_FD_ATTITUDE_CHECKS=0 ./run_viz.sh start`.
+
 The script does the following:
 
 1. Starts PX4 SITL headless (`make px4_sitl gz_x500`).

@@ -2,6 +2,9 @@
 
 Complete PX4 drone visualization and ROS 2 integration stack for SITL simulation.
 
+![DRN Stack x500 Visualization](resources/drn_viz_x500.png)
+
+
 ## Overview
 
 The DRN Stack provides a unified environment for simulating and visualizing PX4 autonomous vehicles in ROS 2 Humble. It bridges PX4 firmware (running in Gazebo SITL) with ROS 2 through the Micro XRCE-DDS protocol and delivers real-time 3D visualization via Foxglove.
@@ -31,17 +34,47 @@ colcon build
 source install/setup.bash
 ```
 
-### Run
+### Run (independent terminals)
+
+Start the stack in separate terminals so each component can be observed and restarted independently.
+
+**Terminal 1: PX4 SITL + Gazebo**
 
 ```bash
-./run_viz.sh start
+cd ~/code/PX4-Autopilot
+PX4_SIM_MODEL=gz_x500 PX4_SYS_AUTOSTART=4001 make px4_sitl gz_x500
 ```
 
-This starts:
-1. PX4 SITL with x500 in Gazebo
-2. Micro XRCE-DDS Agent (UDP port 8888)
-3. ROS 2 nodes: robot_state_publisher, foxglove_bridge, odometry_tf_bridge
-4. Foxglove available at `http://localhost:8765`
+**Terminal 2: Micro XRCE-DDS Agent**
+
+```bash
+MicroXRCEAgent udp4 -p 8888
+```
+
+If your system provides the lowercase binary name instead:
+
+```bash
+micro-xrce-dds-agent udp4 -p 8888
+```
+
+**Terminal 3: ROS 2 visualization**
+
+```bash
+cd ~/code/ros2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch drn_viz visualize.launch.py odometry_topic:=/fmu/out/vehicle_odometry
+```
+
+**Terminal 4: QGroundControl (optional)**
+
+Open QGroundControl and connect via UDP on `localhost:14550`.
+
+When all terminals are running:
+1. PX4 SITL publishes MAVLink and PX4 ROS topics.
+2. XRCE agent bridges PX4 DDS traffic on UDP 8888.
+3. `drn_viz` publishes TF/robot model and Foxglove WebSocket.
+4. Foxglove is available at `ws://localhost:8765`.
 
 ### Connect GCS
 
@@ -109,11 +142,12 @@ drn_stack/
 
 **ROS 2 nodes not starting**
 - Source setup: `source install/setup.bash`
-- Check Gazebo is running: `ps aux | grep gazebo`
+- Check PX4 SITL terminal is running and not reporting startup errors.
 
 **QGroundControl not connecting**
-- Verify PX4 SITL started: `ps aux | grep px4`
-- Check MAVLink port: `netstat -tln | grep 14550`
+- Verify PX4 SITL is still running in Terminal 1.
+- Check MAVLink listener: `ss -lunp | grep 14550`
+- Confirm QGroundControl is using UDP `localhost:14550`.
 
 ## Extending the Stack
 
