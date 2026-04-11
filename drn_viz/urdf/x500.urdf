@@ -1,0 +1,129 @@
+<?xml version="1.0"?>
+<robot name="x500">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="2.0"/>
+      <inertia ixx="0.02166666666666667" ixy="0" ixz="0" iyy="0.02166666666666667" iyz="0" izz="0.04000000000000001"/>
+    </inertial>
+
+    <visual name="base_body">
+      <origin xyz="0 0 0.025" rpy="0 0 3.141592654"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/NXP-HGD-CF.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+
+    <visual name="motor_base_0">
+      <origin xyz="0.174 0.174 0.032" rpy="0 0 -0.45"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Base.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+
+    <visual name="motor_base_1">
+      <origin xyz="-0.174 0.174 0.032" rpy="0 0 -0.45"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Base.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+
+    <visual name="motor_base_2">
+      <origin xyz="0.174 -0.174 0.032" rpy="0 0 -0.45"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Base.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+
+    <visual name="motor_base_3">
+      <origin xyz="-0.174 -0.174 0.032" rpy="0 0 -0.45"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Base.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="rotor_0">
+    <visual name="rotor_0_propeller">
+      <origin xyz="-0.022 -0.14638461538461536 -0.016" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/1345_prop_ccw.stl" scale="0.8461538461538461 0.8461538461538461 0.8461538461538461"/>
+      </geometry>
+    </visual>
+    <visual name="rotor_0_bell">
+      <origin xyz="0 0 -0.032" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Bell.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="rotor_0_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rotor_0"/>
+    <origin xyz="0.174 -0.174 0.06" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rotor_1">
+    <visual name="rotor_1_propeller">
+      <origin xyz="-0.022 -0.14638461538461536 -0.016" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/1345_prop_ccw.stl" scale="0.8461538461538461 0.8461538461538461 0.8461538461538461"/>
+      </geometry>
+    </visual>
+    <visual name="rotor_1_bell">
+      <origin xyz="0 0 -0.032" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Bell.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="rotor_1_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rotor_1"/>
+    <origin xyz="-0.174 0.174 0.06" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rotor_2">
+    <visual name="rotor_2_propeller">
+      <origin xyz="-0.022 -0.14638461538461536 -0.016" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/1345_prop_cw.stl" scale="0.8461538461538461 0.8461538461538461 0.8461538461538461"/>
+      </geometry>
+    </visual>
+    <visual name="rotor_2_bell">
+      <origin xyz="0 0 -0.032" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Bell.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="rotor_2_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rotor_2"/>
+    <origin xyz="0.174 0.174 0.06" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rotor_3">
+    <visual name="rotor_3_propeller">
+      <origin xyz="-0.022 -0.14638461538461536 -0.016" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/1345_prop_cw.stl" scale="0.8461538461538461 0.8461538461538461 0.8461538461538461"/>
+      </geometry>
+    </visual>
+    <visual name="rotor_3_bell">
+      <origin xyz="0 0 -0.032" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://drn_viz/meshes/5010Bell.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="rotor_3_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rotor_3"/>
+    <origin xyz="-0.174 -0.174 0.06" rpy="0 0 0"/>
+  </joint>
+</robot>
