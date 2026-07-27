@@ -23,6 +23,11 @@ ament_target_dependencies(odometry_tf_bridge
 )
 target_link_libraries(odometry_tf_bridge Eigen3::Eigen)
 
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
 install(TARGETS
   odometry_tf_bridge
   DESTINATION lib/${PROJECT_NAME}

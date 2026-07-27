@@ -1,6 +1,12 @@
+"""Launch the DRN x500 visualization and PX4 odometry bridge."""
+
 import os
 
-from ament_index_python.packages import PackageNotFoundError, get_package_prefix, get_package_share_directory
+from ament_index_python.packages import (
+    get_package_prefix,
+    get_package_share_directory,
+    PackageNotFoundError,
+)
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -8,12 +14,16 @@ from launch_ros.actions import Node
 
 
 def _to_bool(value: str) -> bool:
+    """Convert a launch argument string to a boolean."""
     return value.lower() in ('1', 'true', 'yes', 'on')
 
 
 def _launch_setup(context, *args, **kwargs):
+    """Create nodes after launch arguments have been resolved."""
     urdf_path = LaunchConfiguration('urdf').perform(context)
-    use_joint_state_publisher = _to_bool(LaunchConfiguration('use_joint_state_publisher').perform(context))
+    use_joint_state_publisher = _to_bool(
+        LaunchConfiguration('use_joint_state_publisher').perform(context)
+    )
     odometry_topic = LaunchConfiguration('odometry_topic').perform(context)
     world_frame = LaunchConfiguration('world_frame').perform(context)
     base_frame = LaunchConfiguration('base_frame').perform(context)
@@ -77,6 +87,7 @@ def _launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    """Declare launch arguments and defer node construction."""
     package_share = get_package_share_directory('drn_viz')
     default_urdf_path = os.path.join(package_share, 'urdf', 'x500.urdf')
 

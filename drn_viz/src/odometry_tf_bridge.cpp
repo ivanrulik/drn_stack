@@ -50,12 +50,12 @@ public:
   }
 
 private:
-  static bool hasNan(const std::array<float, 3> &v)
+  static bool hasNan(const std::array<float, 3> & v)
   {
     return std::isnan(v[0]) || std::isnan(v[1]) || std::isnan(v[2]);
   }
 
-  static bool hasNanQuat(const std::array<float, 4> &q)
+  static bool hasNanQuat(const std::array<float, 4> & q)
   {
     return std::isnan(q[0]) || std::isnan(q[1]) || std::isnan(q[2]) || std::isnan(q[3]);
   }
@@ -68,7 +68,8 @@ private:
     }
 
     const Eigen::Vector3d pos_ned_eig(pos_ned[0], pos_ned[1], pos_ned[2]);
-    const Eigen::Vector3d pos_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(pos_ned_eig);
+    const Eigen::Vector3d pos_enu = px4_ros_com::frame_transforms::ned_to_enu_local_frame(
+      pos_ned_eig);
 
     tx_ = static_cast<double>(pos_enu.x());
     ty_ = static_cast<double>(pos_enu.y());
@@ -76,7 +77,8 @@ private:
 
     const std::array<float, 4> q_px4{msg->q[0], msg->q[1], msg->q[2], msg->q[3]};
     if (!hasNanQuat(q_px4)) {
-      const auto q_ned = px4_ros_com::frame_transforms::utils::quaternion::array_to_eigen_quat(q_px4);
+      const auto q_ned =
+        px4_ros_com::frame_transforms::utils::quaternion::array_to_eigen_quat(q_px4);
       const auto q_enu = px4_ros_com::frame_transforms::px4_to_ros_orientation(q_ned);
 
       qw_ = static_cast<double>(q_enu.w());

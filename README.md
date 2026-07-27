@@ -48,6 +48,27 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
 
+## Quality checks
+
+Run repository linting from Bash, Git Bash, or WSL:
+
+```bash
+bash ./scripts/lint.sh
+```
+
+The lint command checks shell scripts, YAML, Compose rendering, Python, XML,
+and PowerShell syntax when `pwsh` is available. It requires `shellcheck` and
+`yamllint`.
+
+Build the pinned ROS workspace and run its ament tests in Docker:
+
+```bash
+bash ./scripts/test-ros-build.sh
+```
+
+GitHub Actions runs both commands on every push and pull request. The existing
+Docker smoke workflow continues to build and exercise the complete simulation.
+
 ## Architecture
 
 The stack uses two services:
