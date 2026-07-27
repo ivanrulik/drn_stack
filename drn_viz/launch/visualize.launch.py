@@ -17,6 +17,7 @@ def _launch_setup(context, *args, **kwargs):
     odometry_topic = LaunchConfiguration('odometry_topic').perform(context)
     world_frame = LaunchConfiguration('world_frame').perform(context)
     base_frame = LaunchConfiguration('base_frame').perform(context)
+    foxglove_port = int(LaunchConfiguration('foxglove_port').perform(context))
 
     with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
         robot_description = urdf_file.read()
@@ -34,6 +35,12 @@ def _launch_setup(context, *args, **kwargs):
             executable='foxglove_bridge',
             name='foxglove_bridge',
             output='screen',
+            parameters=[
+                {
+                    'address': '0.0.0.0',
+                    'port': foxglove_port,
+                }
+            ],
         ),
         Node(
             package='drn_viz',
@@ -98,6 +105,11 @@ def generate_launch_description():
             'base_frame',
             default_value='base_link',
             description='Drone base TF frame name.',
+        ),
+        DeclareLaunchArgument(
+            'foxglove_port',
+            default_value='8765',
+            description='TCP port for Foxglove Bridge.',
         ),
         OpaqueFunction(function=_launch_setup),
     ])

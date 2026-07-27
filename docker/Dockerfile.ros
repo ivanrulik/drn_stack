@@ -1,0 +1,84 @@
+FROM ros:humble-ros-base-jammy AS builder
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PX4_MSGS_REF=35a005a86b82cae28bd7a2eb58c4bb7a840830c9
+ARG PX4_ROS_COM_REF=86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af
+ARG MICRO_XRCE_DDS_AGENT_REF=73622810d984349b80bbac0ef55fc0b694d62222
+ARG BUILD_JOBS=4
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        libasio-dev \
+        libeigen3-dev \
+        libtinyxml2-dev \
+        python3-colcon-common-extensions \
+        python3-rosdep \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+RUN git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git \
+    && cd Micro-XRCE-DDS-Agent \
+    && git checkout "${MICRO_XRCE_DDS_AGENT_REF}" \
+    && mkdir build \
+    && cd build \
+    && cmake -DCMAKE_BUILD_TYPE=Release .. \
+    && cmake --build . --parallel "${BUILD_JOBS}" \
+    && cmake --install .
+
+WORKDIR /opt/drn_ws/src
+RUN git clone https://github.com/PX4/px4_msgs.git \
+    && cd px4_msgs \
+    && git checkout "${PX4_MSGS_REF}"
+RUN git clone https://github.com/PX4/px4_ros_com.git \
+    && cd px4_ros_com \
+    && git checkout "${PX4_ROS_COM_REF}"
+
+COPY drn_viz /opt/drn_ws/src/drn_viz
+
+WORKDIR /opt/drn_ws
+RUN . /opt/ros/humble/setup.sh \
+    && rosdep update \
+    && apt-get update \
+    && rosdep install --from-paths src --ignore-src --rosdistro humble -r -y \
+    && colcon build --merge-install --parallel-workers 2 --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM ros:humble-ros-base-jammy
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libasio-dev \
+        libeigen3-dev \
+        libtinyxml2-9 \
+        netcat-openbsd \
+        procps \
+        ros-humble-eigen3-cmake-module \
+        ros-humble-foxglove-bridge \
+        ros-humble-joint-state-publisher \
+        ros-humble-robot-state-publisher \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/ /usr/local/
+COPY --from=builder /opt/drn_ws/install/ /opt/drn_ws/install/
+COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
+COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
+COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
+
+RUN chmod 0755 \
+        /usr/local/bin/drn-ros-entrypoint \
+        /usr/local/bin/drn-ros-healthcheck \
+        /usr/local/bin/drn-smoke-test \
+    && ldconfig
+
+ENV ROS_DISTRO=humble
+ENV ROS_DOMAIN_ID=0
+ENV XRCE_PORT=8888
+ENV FOXGLOVE_PORT=8765
+ENV ODOMETRY_TOPIC=/fmu/out/vehicle_odometry
+
+ENTRYPOINT ["/usr/local/bin/drn-ros-entrypoint"]

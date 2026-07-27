@@ -1,0 +1,43 @@
+name: Docker smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      COMPOSE_PARALLEL_LIMIT: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose --project-name drn-stack -f compose.yaml config --quiet
+
+      - name: Build pinned images
+        run: |
+          docker compose --project-name drn-stack -f compose.yaml build --progress plain ros-viz
+          docker compose --project-name drn-stack -f compose.yaml build --progress plain px4-sitl
+
+      - name: Start stack
+        run: docker compose --project-name drn-stack -f compose.yaml up -d --wait --wait-timeout 300
+
+      - name: Verify PX4, ROS topics, TF, and Foxglove
+        run: bash scripts/simctl.sh smoke
+
+      - name: Capture logs on failure
+        if: failure()
+        run: docker compose --project-name drn-stack -f compose.yaml logs --no-color --tail=500
+
+      - name: Stop stack
+        if: always()
+        run: docker compose --project-name drn-stack -f compose.yaml down --remove-orphans --volumes --timeout 30

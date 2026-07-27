@@ -1,0 +1,41 @@
+FROM ubuntu:22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PX4_REF=a5eb12d2ab591251faa009f76b2685b8cc64405d
+ARG BUILD_JOBS=4
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV TZ=Etc/UTC
+ENV RUNS_IN_DOCKER=true
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        locales \
+        lsb-release \
+        procps \
+        sudo \
+        tzdata \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone --recursive https://github.com/PX4/PX4-Autopilot.git \
+    && cd PX4-Autopilot \
+    && git checkout "${PX4_REF}" \
+    && git submodule sync --recursive \
+    && git submodule update --init --recursive
+
+WORKDIR /opt/PX4-Autopilot
+RUN bash Tools/setup/ubuntu.sh --no-nuttx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Compile SITL during the image build so startup only launches the simulator.
+RUN make -j"${BUILD_JOBS}" px4_sitl_default
+
+COPY scripts/docker/px4-entrypoint.sh /usr/local/bin/drn-px4-entrypoint
+RUN chmod 0755 /usr/local/bin/drn-px4-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/drn-px4-entrypoint"]

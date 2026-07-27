@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+build
+install
+log
+**/__pycache__
+**/*.pyc
+resources
+*.md
+!drn_viz/README.md

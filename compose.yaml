@@ -1,0 +1,57 @@
+name: drn-stack
+
+services:
+  ros-viz:
+    image: drn-stack/ros-viz:humble
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ros
+      args:
+        PX4_MSGS_REF: 35a005a86b82cae28bd7a2eb58c4bb7a840830c9
+        PX4_ROS_COM_REF: 86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af
+        MICRO_XRCE_DDS_AGENT_REF: 73622810d984349b80bbac0ef55fc0b694d62222
+    init: true
+    environment:
+      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
+      XRCE_PORT: "8888"
+      FOXGLOVE_PORT: "${FOXGLOVE_PORT:-8765}"
+      ODOMETRY_TOPIC: "/fmu/out/vehicle_odometry"
+    ports:
+      - "${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"
+      - "${QGC_PORT:-14550}:14550/udp"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/drn-ros-healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    stop_grace_period: 30s
+
+  px4-sitl:
+    image: drn-stack/px4-sitl:v1.17.0
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.px4
+      args:
+        PX4_REF: a5eb12d2ab591251faa009f76b2685b8cc64405d
+    init: true
+    network_mode: "service:ros-viz"
+    depends_on:
+      ros-viz:
+        condition: service_healthy
+        restart: true
+    environment:
+      HEADLESS: "1"
+      PX4_SIM_MODEL: "${PX4_SIM_MODEL:-gz_x500}"
+      PX4_GZ_WORLD: "${PX4_GZ_WORLD:-default}"
+      PX4_SIM_SPEED_FACTOR: "${PX4_SIM_SPEED_FACTOR:-1}"
+      PX4_NET_INTERFACE: "eth0"
+      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
+      XRCE_PORT: "8888"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x px4 >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 30s
+    stop_grace_period: 30s
