@@ -65,6 +65,14 @@ def _launch_setup(context, *args, **kwargs):
                 }
             ],
         ),
+        Node(
+            package='drn_control',
+            executable='drn_control_node',
+            name='drn_control',
+            output='screen',
+            respawn=True,
+            respawn_delay=2.0,
+        ),
     ]
 
     if use_joint_state_publisher:

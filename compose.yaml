@@ -9,6 +9,7 @@ services:
       args:
         PX4_MSGS_REF: 35a005a86b82cae28bd7a2eb58c4bb7a840830c9
         PX4_ROS_COM_REF: 86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af
+        PX4_ROS2_INTERFACE_REF: 4a3370f084ac6f1ef001a4afa2b007845ffd0837
         MICRO_XRCE_DDS_AGENT_REF: 73622810d984349b80bbac0ef55fc0b694d62222
     init: true
     environment:
