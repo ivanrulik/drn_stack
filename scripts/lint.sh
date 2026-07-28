@@ -28,11 +28,16 @@ docker compose --project-name drn-stack --file compose.yaml config --quiet
 
 python3 -m compileall -q drn_viz/launch
 python3 - <<'PY'
+import json
 from pathlib import Path
 from xml.etree import ElementTree
 
 for path in (Path("drn_viz/package.xml"), *Path("drn_viz/urdf").glob("*.urdf")):
     ElementTree.parse(path)
+
+for path in Path("foxglove").glob("*.json"):
+    with path.open(encoding="utf-8") as stream:
+        json.load(stream)
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

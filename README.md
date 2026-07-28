@@ -105,9 +105,15 @@ The convenience scripts read the same environment variables.
 
 1. Open Foxglove on the host.
 2. Add a Foxglove WebSocket connection to `ws://localhost:8765`.
-3. Add a 3D panel.
-4. Use `map` as the fixed frame.
-5. Add the Robot Model layer from `/robot_description`.
+3. Open the **Layouts** menu and select **Import from file...**.
+4. Import [`foxglove/drn-simulation.json`](foxglove/drn-simulation.json).
+
+The default layout includes:
+
+- A 3D x500 view using `map` as the fixed frame.
+- The `/robot_description` model, map grid, and `map -> base_link` transform.
+- Live NED position and velocity plots.
+- Vehicle status and odometry message inspectors.
 
 The ROS bridge publishes an identity `map -> base_link` transform until the first PX4 odometry message arrives.
 

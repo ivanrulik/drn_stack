@@ -1,0 +1,195 @@
+{
+  "configById": {
+    "3D!drnsim": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 8,
+        "phi": 45,
+        "thetaOffset": 135,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "ignoreColladaUpAxis": true,
+        "transforms": {
+          "showLabel": false,
+          "axisScale": 0.5
+        }
+      },
+      "transforms": {
+        "frame:map": {
+          "visible": true
+        },
+        "frame:base_link": {
+          "visible": true
+        }
+      },
+      "topics": {
+        "/robot_description": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "drn-map-grid": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Map grid",
+          "instanceId": "drn-map-grid",
+          "layerId": "foxglove.Grid",
+          "frameId": "map",
+          "size": 20,
+          "divisions": 20,
+          "lineWidth": 1,
+          "color": "#6b7280",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "order": 1
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "foxglovePanelTitle": "x500 Simulation"
+    },
+    "Plot!position": {
+      "title": "Position (NED)",
+      "paths": [
+        {
+          "value": "/fmu/out/vehicle_odometry.position[0]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "North"
+        },
+        {
+          "value": "/fmu/out/vehicle_odometry.position[1]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "East"
+        },
+        {
+          "value": "/fmu/out/vehicle_odometry.position[2]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Down"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Position (NED)"
+    },
+    "Plot!velocity": {
+      "title": "Velocity (NED)",
+      "paths": [
+        {
+          "value": "/fmu/out/vehicle_odometry.velocity[0]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "North"
+        },
+        {
+          "value": "/fmu/out/vehicle_odometry.velocity[1]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "East"
+        },
+        {
+          "value": "/fmu/out/vehicle_odometry.velocity[2]",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Down"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Velocity (NED)"
+    },
+    "RawMessages!status": {
+      "topicPath": "/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Vehicle Status"
+    },
+    "RawMessages!odometry": {
+      "topicPath": "/fmu/out/vehicle_odometry",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Vehicle Odometry"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime",
+    "timeDisplayMethod": "ROS"
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!drnsim",
+    "second": {
+      "direction": "column",
+      "first": "Plot!position",
+      "second": {
+        "direction": "column",
+        "first": "Plot!velocity",
+        "second": {
+          "direction": "row",
+          "first": "RawMessages!status",
+          "second": "RawMessages!odometry",
+          "splitPercentage": 50
+        },
+        "splitPercentage": 48
+      },
+      "splitPercentage": 35
+    },
+    "splitPercentage": 65
+  }
+}
