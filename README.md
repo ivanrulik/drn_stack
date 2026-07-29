@@ -28,7 +28,7 @@ The first run builds PX4, Gazebo, the Micro XRCE-DDS Agent, and the ROS workspac
 When the readiness checks pass:
 
 - Foxglove: `ws://localhost:8765`
-- QGroundControl: UDP `localhost:14550`
+- QGroundControl: listens for UDP on `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
 - DRN control status: `/drn/control/status`
 - Drone transform: `map -> base_link`
@@ -132,10 +132,13 @@ PX4_GZ_WORLD=default
 PX4_SIM_SPEED_FACTOR=1
 ROS_DOMAIN_ID=0
 FOXGLOVE_PORT=8765
+QGC_HOST=host.docker.internal
 QGC_PORT=14550
 ```
 
 The convenience scripts read the same environment variables.
+PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
+`QGC_PORT`; QGroundControl does not need a remote server entry.
 
 ## Foxglove
 
