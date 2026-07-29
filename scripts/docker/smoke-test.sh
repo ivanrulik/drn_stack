@@ -26,6 +26,7 @@ quick_smoke() {
   grep -Fx /drn_control <<<"${nodes}" >/dev/null
   grep -Fx /fmu/out/vehicle_odometry <<<"${topics}" >/dev/null
   grep -Fx /drn/control/status <<<"${topics}" >/dev/null
+  grep -Fx /drn/control/activate <<<"${services}" >/dev/null
   grep -Fx /drn/control/takeoff <<<"${services}" >/dev/null
   grep -Fx /drn/control/hold <<<"${services}" >/dev/null
   grep -Fx /drn/control/land <<<"${services}" >/dev/null

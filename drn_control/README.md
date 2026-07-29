@@ -5,9 +5,9 @@
 named `DRN Control`; it does not publish a hand-written offboard heartbeat or
 duplicate PX4 command acknowledgement and retry logic.
 
-The node is inert at startup. An operator must select `DRN Control` in
-QGroundControl before any service request is accepted, and takeoff uses PX4
-preflight checks before arming.
+The node is inert at startup. An operator must either select `DRN Control` in
+QGroundControl or call `/drn/control/activate` while disarmed before any flight
+request is accepted. Takeoff uses PX4 preflight checks before arming.
 
 ## Interface
 
@@ -15,6 +15,7 @@ preflight checks before arming.
 | --- | --- | --- |
 | `/drn/control/status` | `std_msgs/msg/String` | Latched lifecycle and error status |
 | `/drn/control/setpoint` | `geometry_msgs/msg/PoseStamped` | Absolute `map`-frame ENU position and optional yaw |
+| `/drn/control/activate` | `std_srvs/srv/Trigger` | Select DRN Control while disarmed |
 | `/drn/control/takeoff` | `std_srvs/srv/Trigger` | Arm with preflight checks, take off, then hold |
 | `/drn/control/hold` | `std_srvs/srv/Trigger` | Hold the current local position |
 | `/drn/control/land` | `std_srvs/srv/Trigger` | Enter PX4 Land and wait for disarm |

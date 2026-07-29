@@ -31,6 +31,9 @@
 
 #include <drn_control/pose_conversion.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <px4_msgs/msg/vehicle_command.hpp>
+#include <px4_msgs/msg/vehicle_command_ack.hpp>
+#include <px4_msgs/srv/vehicle_command.hpp>
 #include <px4_ros2/components/mode.hpp>
 #include <px4_ros2/components/mode_executor.hpp>
 #include <px4_ros2/components/node_with_mode.hpp>
@@ -209,6 +212,13 @@ public:
     mode_(owned_mode),
     node_(owned_mode.node())
   {
+    vehicle_command_client_ =
+      node_.create_client<px4_msgs::srv::VehicleCommand>("/fmu/vehicle_command");
+    activate_service_ = createTriggerService(
+      "/drn/control/activate",
+      [this](std_srvs::srv::Trigger::Response & response) {
+        requestActivate(response);
+      });
     takeoff_service_ = createTriggerService(
       "/drn/control/takeoff",
       [this](std_srvs::srv::Trigger::Response & response) {
@@ -268,6 +278,7 @@ private:
   enum class Operation
   {
     Idle,
+    Activating,
     Arming,
     TakingOff,
     Landing,
@@ -308,6 +319,80 @@ private:
     response.success = true;
     response.message = "Request accepted; monitor /drn/control/status";
     return true;
+  }
+
+  void requestActivate(TriggerResponse & response)
+  {
+    if (isInCharge()) {
+      response.success = true;
+      response.message = "DRN Control is already active";
+      return;
+    }
+    if (isArmed()) {
+      response.success = false;
+      response.message = "Activate DRN Control only while the vehicle is disarmed";
+      return;
+    }
+    if (operation_ != Operation::Idle) {
+      response.success = false;
+      response.message = "Another control operation is already in progress";
+      return;
+    }
+
+    operation_ = Operation::Activating;
+    const std::uint64_t generation = ++generation_;
+    mode_.publishStatus("activating");
+
+    if (!vehicle_command_client_->service_is_ready()) {
+      operation_ = Operation::Idle;
+      response.success = false;
+      response.message = "PX4 vehicle command service is unavailable";
+      mode_.publishStatus("error: PX4 vehicle command service unavailable");
+      return;
+    }
+
+    auto request = std::make_shared<px4_msgs::srv::VehicleCommand::Request>();
+    auto & command = request->request;
+    command.timestamp =
+      static_cast<std::uint64_t>(node_.get_clock()->now().nanoseconds() / 1000);
+    command.param1 = static_cast<float>(mode_.id());
+    command.command = px4_msgs::msg::VehicleCommand::VEHICLE_CMD_SET_NAV_STATE;
+    command.target_system = 1;
+    command.target_component = 1;
+    command.source_system = 1;
+    command.source_component = 1;
+    command.from_external = true;
+
+    vehicle_command_client_->async_send_request(
+      request,
+      [this, generation](
+        rclcpp::Client<px4_msgs::srv::VehicleCommand>::SharedFuture future)
+      {
+        if (!isCurrent(generation)) {
+          return;
+        }
+
+        try {
+          const auto & reply = future.get()->reply;
+          if (reply.result ==
+          px4_msgs::msg::VehicleCommandAck::VEHICLE_CMD_RESULT_ACCEPTED)
+          {
+            mode_.publishStatus("activation_accepted");
+          } else {
+            operation_ = Operation::Idle;
+            mode_.publishStatus(
+              "error: activation rejected by PX4 (result " +
+              std::to_string(reply.result) + ")");
+          }
+        } catch (const std::exception & exception) {
+          operation_ = Operation::Idle;
+          mode_.publishStatus(
+            "error: activation request failed: " + std::string(exception.what()));
+        }
+      });
+
+    response.success = true;
+    response.message = "Activation requested; monitor /drn/control/status";
   }
 
   void requestTakeoff(TriggerResponse & response)
@@ -481,6 +566,8 @@ private:
   Operation operation_{Operation::Idle};
   std::uint64_t generation_{0};
 
+  rclcpp::Client<px4_msgs::srv::VehicleCommand>::SharedPtr vehicle_command_client_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr activate_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr takeoff_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr hold_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_service_;

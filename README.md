@@ -100,8 +100,14 @@ moves the vehicle.
 To fly in SITL:
 
 1. Start the stack and connect QGroundControl.
-2. Select the external flight mode named **DRN Control**. Selecting it while
-   disarmed does not arm or take off.
+2. Select the external flight mode named **DRN Control**, or activate it
+   through ROS if QGroundControl does not display external modes:
+
+   ```powershell
+   .\scripts\run.ps1 ros2 service call /drn/control/activate std_srvs/srv/Trigger '{}'
+   ```
+
+   Activation is accepted only while disarmed and does not arm or take off.
 3. Request takeoff:
 
    ```powershell

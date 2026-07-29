@@ -13,6 +13,7 @@
 
   <depend>eigen</depend>
   <depend>geometry_msgs</depend>
+  <depend>px4_msgs</depend>
   <depend>px4_ros2_cpp</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
