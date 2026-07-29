@@ -28,7 +28,7 @@ The first run builds PX4, Gazebo, the Micro XRCE-DDS Agent, and the ROS workspac
 When the readiness checks pass:
 
 - Foxglove: `ws://localhost:8765`
-- QGroundControl: UDP `localhost:14550`
+- QGroundControl: listens for UDP on `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
 - DRN control status: `/drn/control/status`
 - Drone transform: `map -> base_link`
@@ -100,8 +100,14 @@ moves the vehicle.
 To fly in SITL:
 
 1. Start the stack and connect QGroundControl.
-2. Select the external flight mode named **DRN Control**. Selecting it while
-   disarmed does not arm or take off.
+2. Select the external flight mode named **DRN Control**, or activate it
+   through ROS if QGroundControl does not display external modes:
+
+   ```powershell
+   .\scripts\run.ps1 ros2 service call /drn/control/activate std_srvs/srv/Trigger '{}'
+   ```
+
+   Activation is accepted only while disarmed and does not arm or take off.
 3. Request takeoff:
 
    ```powershell
@@ -132,10 +138,13 @@ PX4_GZ_WORLD=default
 PX4_SIM_SPEED_FACTOR=1
 ROS_DOMAIN_ID=0
 FOXGLOVE_PORT=8765
+QGC_HOST=host.docker.internal
 QGC_PORT=14550
 ```
 
 The convenience scripts read the same environment variables.
+PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
+`QGC_PORT`; QGroundControl does not need a remote server entry.
 
 ## Foxglove
 

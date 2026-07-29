@@ -13,27 +13,39 @@ foxglove_listening() {
 }
 
 quick_smoke() {
-  ros2 node list | grep -qx /foxglove_bridge
-  ros2 node list | grep -qx /odometry_tf_bridge
-  ros2 node list | grep -qx /drn_control
-  ros2 topic list | grep -qx /fmu/out/vehicle_odometry
-  ros2 topic list | grep -qx /drn/control/status
-  ros2 service list | grep -qx /drn/control/takeoff
-  ros2 service list | grep -qx /drn/control/hold
-  ros2 service list | grep -qx /drn/control/land
-  ros2 service list | grep -qx /drn/control/rtl
+  local nodes
+  local services
+  local topics
+
+  nodes="$(ros2 node list)"
+  topics="$(ros2 topic list)"
+  services="$(ros2 service list)"
+
+  grep -Fx /foxglove_bridge <<<"${nodes}" >/dev/null
+  grep -Fx /odometry_tf_bridge <<<"${nodes}" >/dev/null
+  grep -Fx /drn_control <<<"${nodes}" >/dev/null
+  grep -Fx /fmu/out/vehicle_odometry <<<"${topics}" >/dev/null
+  grep -Fx /drn/control/status <<<"${topics}" >/dev/null
+  grep -Fx /drn/control/activate <<<"${services}" >/dev/null
+  grep -Fx /drn/control/takeoff <<<"${services}" >/dev/null
+  grep -Fx /drn/control/hold <<<"${services}" >/dev/null
+  grep -Fx /drn/control/land <<<"${services}" >/dev/null
+  grep -Fx /drn/control/rtl <<<"${services}" >/dev/null
   foxglove_listening
 }
 
 full_smoke() {
   local control_status
 
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 180 bash -c \
-    'until ros2 topic list | grep -qx /fmu/out/vehicle_odometry; do sleep 2; done'
+    'until output="$(ros2 topic list)" && grep -Fx /fmu/out/vehicle_odometry <<<"${output}" >/dev/null; do sleep 2; done'
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 60 bash -c \
-    'until ros2 node list | grep -qx /drn_control; do sleep 2; done'
+    'until output="$(ros2 node list)" && grep -Fx /drn_control <<<"${output}" >/dev/null; do sleep 2; done'
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 30 bash -c \
-    'until ros2 service list | grep -qx /drn/control/takeoff; do sleep 2; done'
+    'until output="$(ros2 service list)" && grep -Fx /drn/control/takeoff <<<"${output}" >/dev/null; do sleep 2; done'
   timeout 60 ros2 topic echo \
     --qos-reliability best_effort \
     --qos-durability volatile \

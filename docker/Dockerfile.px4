@@ -32,6 +32,13 @@ WORKDIR /opt/PX4-Autopilot
 RUN bash Tools/setup/ubuntu.sh --no-nuttx \
     && rm -rf /var/lib/apt/lists/*
 
+# Source-built SITL sends its GCS stream to container-localhost by default.
+# Keep the upstream MAVLink configuration but point that stream at the host
+# address resolved by the entrypoint so QGC can receive it through Docker.
+RUN sed -i \
+    's|^mavlink start -x -u \$udp_gcs_port_local -r 4000000 -f$|mavlink start -x -u $udp_gcs_port_local -r 4000000 -o $QGC_PORT -t $QGC_HOST_IP -f|' \
+    ROMFS/px4fmu_common/init.d-posix/px4-rc.mavlink
+
 # Compile SITL during the image build so startup only launches the simulator.
 RUN make -j"${BUILD_JOBS}" px4_sitl_default
 
