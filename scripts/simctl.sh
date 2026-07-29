@@ -29,6 +29,35 @@ require_docker() {
   fi
 }
 
+storage_status() {
+  local available_kib available_gib
+  available_kib="$(df -Pk "${REPO_ROOT}" | awk 'NR == 2 {print $4}')"
+  if [[ ! "${available_kib}" =~ ^[0-9]+$ ]]; then
+    echo "Could not determine free host space for ${REPO_ROOT}." >&2
+    exit 1
+  fi
+  available_gib="$(awk -v kib="${available_kib}" 'BEGIN {printf "%.1f", kib / 1048576}')"
+  echo "Host storage: ${available_gib} GiB free on the filesystem containing the repository."
+}
+
+check_storage() {
+  local minimum_gib="${DRN_MIN_HOST_FREE_GB:-50}"
+  local available_kib minimum_kib
+  if [[ ! "${minimum_gib}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "DRN_MIN_HOST_FREE_GB must be a non-negative number; got '${minimum_gib}'." >&2
+    exit 2
+  fi
+
+  available_kib="$(df -Pk "${REPO_ROOT}" | awk 'NR == 2 {print $4}')"
+  minimum_kib="$(awk -v gib="${minimum_gib}" 'BEGIN {printf "%.0f", gib * 1048576}')"
+  storage_status
+  if (( available_kib < minimum_kib )); then
+    echo "Refusing to start with less than ${minimum_gib} GiB free." >&2
+    echo "Free host space or set DRN_MIN_HOST_FREE_GB only when the override is intentional." >&2
+    exit 1
+  fi
+}
+
 check_port_conflicts() {
   local port owner
   for port in "${FOXGLOVE_PORT:-8765}" "${QGC_PORT:-14550}"; do
@@ -70,6 +99,7 @@ smoke_quick() {
 
 run_stack() {
   require_docker
+  check_storage
   check_port_conflicts
   compose config --quiet
   if ! compose build ros-viz || ! compose build px4-sitl; then
@@ -97,6 +127,7 @@ stop_stack() {
 
 restart_stack() {
   require_docker
+  check_storage
   compose stop --timeout 30
   if ! compose up -d --no-build --remove-orphans --wait --wait-timeout 300; then
     dump_failure
@@ -111,6 +142,7 @@ restart_stack() {
 
 status_stack() {
   require_docker
+  storage_status
   compose ps
   smoke_quick
   echo
