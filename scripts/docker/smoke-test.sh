@@ -15,13 +15,25 @@ foxglove_listening() {
 quick_smoke() {
   ros2 node list | grep -qx /foxglove_bridge
   ros2 node list | grep -qx /odometry_tf_bridge
+  ros2 node list | grep -qx /drn_control
   ros2 topic list | grep -qx /fmu/out/vehicle_odometry
+  ros2 topic list | grep -qx /drn/control/status
+  ros2 service list | grep -qx /drn/control/takeoff
+  ros2 service list | grep -qx /drn/control/hold
+  ros2 service list | grep -qx /drn/control/land
+  ros2 service list | grep -qx /drn/control/rtl
   foxglove_listening
 }
 
 full_smoke() {
+  local control_status
+
   timeout 180 bash -c \
     'until ros2 topic list | grep -qx /fmu/out/vehicle_odometry; do sleep 2; done'
+  timeout 60 bash -c \
+    'until ros2 node list | grep -qx /drn_control; do sleep 2; done'
+  timeout 30 bash -c \
+    'until ros2 service list | grep -qx /drn/control/takeoff; do sleep 2; done'
   timeout 60 ros2 topic echo \
     --qos-reliability best_effort \
     --qos-durability volatile \
@@ -30,6 +42,11 @@ full_smoke() {
     --qos-reliability reliable \
     --qos-durability transient_local \
     --once /robot_description >/dev/null
+  control_status="$(timeout 30 ros2 topic echo \
+    --qos-reliability reliable \
+    --qos-durability transient_local \
+    --once /drn/control/status)"
+  grep -Eq '^data: (inactive|ready_armed|ready_disarmed)$' <<<"${control_status}"
   (
     set +o pipefail
     timeout 15 ros2 run tf2_ros tf2_echo map base_link 2>&1 |

@@ -18,6 +18,6 @@ MSYS_NO_PATHCONV=1 docker run --rm "${IMAGE_NAME}" bash -lc '
   source /opt/drn_ws/install/setup.bash
   set -u
   cd /opt/drn_ws
-  colcon test --merge-install --packages-select drn_viz --event-handlers console_direct+
+  colcon test --merge-install --packages-select drn_control drn_viz --event-handlers console_direct+
   colcon test-result --verbose
 '

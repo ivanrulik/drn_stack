@@ -76,7 +76,7 @@
       },
       "publish": {
         "type": "point",
-        "poseTopic": "/move_base_simple/goal",
+        "poseTopic": "/drn/control/setpoint",
         "pointTopic": "/clicked_point",
         "poseEstimateTopic": "/initialpose",
         "poseEstimateXDeviation": 0.5,
@@ -156,11 +156,11 @@
       "fontSize": 14,
       "foxglovePanelTitle": "Vehicle Status"
     },
-    "RawMessages!odometry": {
-      "topicPath": "/fmu/out/vehicle_odometry",
+    "RawMessages!control": {
+      "topicPath": "/drn/control/status",
       "diffEnabled": false,
       "fontSize": 14,
-      "foxglovePanelTitle": "Vehicle Odometry"
+      "foxglovePanelTitle": "DRN Control Status"
     }
   },
   "globalVariables": {},
@@ -183,7 +183,7 @@
         "second": {
           "direction": "row",
           "first": "RawMessages!status",
-          "second": "RawMessages!odometry",
+          "second": "RawMessages!control",
           "splitPercentage": 50
         },
         "splitPercentage": 48

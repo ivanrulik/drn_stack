@@ -3,6 +3,7 @@ FROM ros:humble-ros-base-jammy AS builder
 ARG DEBIAN_FRONTEND=noninteractive
 ARG PX4_MSGS_REF=35a005a86b82cae28bd7a2eb58c4bb7a840830c9
 ARG PX4_ROS_COM_REF=86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af
+ARG PX4_ROS2_INTERFACE_REF=4a3370f084ac6f1ef001a4afa2b007845ffd0837
 ARG MICRO_XRCE_DDS_AGENT_REF=73622810d984349b80bbac0ef55fc0b694d62222
 ARG BUILD_JOBS=4
 
@@ -35,7 +36,12 @@ RUN git clone https://github.com/PX4/px4_msgs.git \
 RUN git clone https://github.com/PX4/px4_ros_com.git \
     && cd px4_ros_com \
     && git checkout "${PX4_ROS_COM_REF}"
+RUN git clone https://github.com/Auterion/px4-ros2-interface-lib.git \
+    && cd px4-ros2-interface-lib \
+    && git checkout "${PX4_ROS2_INTERFACE_REF}" \
+    && touch examples/COLCON_IGNORE
 
+COPY drn_control /opt/drn_ws/src/drn_control
 COPY drn_viz /opt/drn_ws/src/drn_viz
 
 WORKDIR /opt/drn_ws

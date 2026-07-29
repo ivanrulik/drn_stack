@@ -32,7 +32,11 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree
 
-for path in (Path("drn_viz/package.xml"), *Path("drn_viz/urdf").glob("*.urdf")):
+for path in (
+    Path("drn_control/package.xml"),
+    Path("drn_viz/package.xml"),
+    *Path("drn_viz/urdf").glob("*.urdf"),
+):
     ElementTree.parse(path)
 
 for path in Path("foxglove").glob("*.json"):

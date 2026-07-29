@@ -30,6 +30,7 @@ When the readiness checks pass:
 - Foxglove: `ws://localhost:8765`
 - QGroundControl: UDP `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
+- DRN control status: `/drn/control/status`
 - Drone transform: `map -> base_link`
 
 Gazebo runs headless. Use Foxglove on the host for 3D visualization.
@@ -42,6 +43,7 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Show health and topic status | `.\scripts\status.ps1` | `bash ./scripts/status.sh` |
 | Follow all logs | `.\scripts\logs.ps1` | `bash ./scripts/logs.sh` |
 | Follow PX4 logs | `.\scripts\logs.ps1 -Service px4-sitl` | `bash ./scripts/logs.sh px4-sitl` |
+| Run a command in ROS | `.\scripts\run.ps1 ros2 node list` | `bash ./scripts/run.sh ros2 node list` |
 | Restart without rebuilding | `.\scripts\restart.ps1` | `bash ./scripts/restart.sh` |
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
@@ -73,7 +75,7 @@ Docker smoke workflow continues to build and exercise the complete simulation.
 
 The stack uses two services:
 
-1. `ros-viz` runs ROS 2, Micro XRCE-DDS Agent, `drn_viz`, robot state publisher, and Foxglove Bridge.
+1. `ros-viz` runs ROS 2, Micro XRCE-DDS Agent, `drn_control`, `drn_viz`, robot state publisher, and Foxglove Bridge.
 2. `px4-sitl` runs PX4 and Gazebo Harmonic in headless mode.
 
 The PX4 service shares the ROS service's network namespace. This preserves PX4 SITL's standard XRCE connection to `localhost:8888` without depending on cross-container DDS discovery.
@@ -83,8 +85,42 @@ Pinned upstream revisions:
 - PX4-Autopilot `v1.17.0`
 - `px4_msgs` `v1.17.0`
 - `px4_ros_com` commit `86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af`
+- PX4 ROS 2 Interface Library `release/1.17` commit `4a3370f084ac6f1ef001a4afa2b007845ffd0837`
 - Micro XRCE-DDS Agent `v2.4.3`
 - ROS 2 Humble on Ubuntu 22.04
+
+## Flight controls
+
+`drn_control` uses the official PX4 ROS 2 Control Interface rather than
+reimplementing the raw offboard heartbeat, mode registration, command
+acknowledgements, retries, or failsafe ownership. Startup is inert and the
+normal smoke test only checks that the interface registered; it never arms or
+moves the vehicle.
+
+To fly in SITL:
+
+1. Start the stack and connect QGroundControl.
+2. Select the external flight mode named **DRN Control**. Selecting it while
+   disarmed does not arm or take off.
+3. Request takeoff:
+
+   ```powershell
+   .\scripts\run.ps1 ros2 service call /drn/control/takeoff std_srvs/srv/Trigger '{}'
+   ```
+
+4. In the imported Foxglove layout, use the 3D panel's pose publishing tool to
+   send an absolute target to `/drn/control/setpoint`. Targets use the ROS
+   `map` frame in ENU coordinates: x east, y north, and z up. Setpoints are
+   ignored unless the vehicle is armed and **DRN Control** is active.
+5. Land or return through PX4:
+
+   ```powershell
+   .\scripts\run.ps1 ros2 service call /drn/control/land std_srvs/srv/Trigger '{}'
+   .\scripts\run.ps1 ros2 service call /drn/control/rtl std_srvs/srv/Trigger '{}'
+   ```
+
+The complete topic and service contract, input validation, and recovery
+behavior are documented in [`drn_control/README.md`](drn_control/README.md).
 
 ## Configuration
 
@@ -113,7 +149,8 @@ The default layout includes:
 - A 3D x500 view using `map` as the fixed frame.
 - The `/robot_description` model, map grid, and `map -> base_link` transform.
 - Live NED position and velocity plots.
-- Vehicle status and odometry message inspectors.
+- Vehicle and DRN control status inspectors.
+- A pose publishing tool configured for `/drn/control/setpoint`.
 
 The ROS bridge publishes an identity `map -> base_link` transform until the first PX4 odometry message arrives.
 
@@ -158,6 +195,6 @@ This does not remove unrelated Docker images or the global Docker build cache.
 
 ## Development
 
-`run-sim` always invokes a cached Compose build. Changes under `drn_viz/` invalidate only the relevant ROS image layers, rebuild the workspace, and recreate the changed service.
-
-The project is currently monitoring-only. It subscribes to PX4 odometry and does not send commands to PX4.
+`run-sim` always invokes a cached Compose build. Changes under `drn_control/`
+or `drn_viz/` invalidate only the relevant ROS image layers, rebuild the
+workspace, and recreate the changed service.
