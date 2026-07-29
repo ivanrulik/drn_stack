@@ -37,10 +37,13 @@ quick_smoke() {
 full_smoke() {
   local control_status
 
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 180 bash -c \
     'until output="$(ros2 topic list)" && grep -Fx /fmu/out/vehicle_odometry <<<"${output}" >/dev/null; do sleep 2; done'
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 60 bash -c \
     'until output="$(ros2 node list)" && grep -Fx /drn_control <<<"${output}" >/dev/null; do sleep 2; done'
+  # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 30 bash -c \
     'until output="$(ros2 service list)" && grep -Fx /drn/control/takeoff <<<"${output}" >/dev/null; do sleep 2; done'
   timeout 60 ros2 topic echo \
