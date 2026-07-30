@@ -62,6 +62,69 @@ function Get-Setting {
     return $Value
 }
 
+function Get-StorageStatus {
+    $DriveRoot = [System.IO.Path]::GetPathRoot($RepoRoot)
+    $Drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($DriveRoot.TrimEnd('\'))'"
+    if (-not $Drive) {
+        throw "Could not determine free space for $DriveRoot."
+    }
+
+    $VhdPath = Join-Path $env:LOCALAPPDATA 'Docker\wsl\disk\docker_data.vhdx'
+    $VhdSizeBytes = if (Test-Path -LiteralPath $VhdPath) {
+        (Get-Item -LiteralPath $VhdPath).Length
+    }
+    else {
+        $null
+    }
+
+    [pscustomobject]@{
+        Drive = $Drive.DeviceID
+        FreeGiB = [Math]::Round($Drive.FreeSpace / 1GB, 1)
+        VhdPath = $VhdPath
+        VhdGiB = if ($null -ne $VhdSizeBytes) {
+            [Math]::Round($VhdSizeBytes / 1GB, 1)
+        }
+        else {
+            $null
+        }
+    }
+}
+
+function Show-StorageStatus {
+    $Storage = Get-StorageStatus
+    $VhdText = if ($null -ne $Storage.VhdGiB) {
+        "; Docker VHDX: $($Storage.VhdGiB) GiB"
+    }
+    else {
+        ''
+    }
+    Write-Host "Host storage: $($Storage.Drive) has $($Storage.FreeGiB) GiB free$VhdText"
+    return $Storage
+}
+
+function Assert-StorageAvailable {
+    $MinimumText = Get-Setting -Name 'DRN_MIN_HOST_FREE_GB' -Default '50'
+    $MinimumGiB = 0.0
+    if (-not [double]::TryParse(
+        $MinimumText,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [ref]$MinimumGiB
+    ) -or $MinimumGiB -lt 0) {
+        throw "DRN_MIN_HOST_FREE_GB must be a non-negative number; got '$MinimumText'."
+    }
+
+    $Storage = Show-StorageStatus
+    if ($Storage.FreeGiB -lt $MinimumGiB) {
+        throw (
+            "Refusing to start with only $($Storage.FreeGiB) GiB free on $($Storage.Drive). " +
+            "The safety minimum is $MinimumGiB GiB. Stop all containers, then run " +
+            "'.\scripts\reclaim-docker-space.ps1 -Force', or free space another way. " +
+            'Override only when intentional with DRN_MIN_HOST_FREE_GB.'
+        )
+    }
+}
+
 function Assert-Docker {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'Docker CLI was not found. Install or start Docker Desktop.'
@@ -164,6 +227,7 @@ Assert-Docker
 
 switch ($Action) {
     'run' {
+        Assert-StorageAvailable
         Assert-PortsAvailable
         Invoke-Compose config --quiet
         try {
@@ -179,6 +243,7 @@ switch ($Action) {
         }
     }
     'restart' {
+        Assert-StorageAvailable
         try {
             Invoke-Compose stop --timeout 30
             Invoke-Compose up -d --no-build --remove-orphans --wait --wait-timeout 300
@@ -191,6 +256,7 @@ switch ($Action) {
         }
     }
     'status' {
+        Show-StorageStatus | Out-Null
         Invoke-Compose ps
         Invoke-QuickSmoke
         Write-Host "`nFoxglove and PX4 odometry checks passed."

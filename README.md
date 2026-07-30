@@ -50,6 +50,30 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
 
+## Docker storage safety
+
+PX4 and ROS image builds can write much more temporary data than their final
+images contain. On Docker Desktop with WSL 2, the dynamically allocated
+`docker_data.vhdx` can retain that physical space until unused blocks are
+trimmed and WSL shuts down.
+
+The run and restart scripts refuse to begin with less than 50 GiB free on the
+host filesystem. Set `DRN_MIN_HOST_FREE_GB` only when an intentional override
+is needed. Both containers use Docker's bounded, compressed `local` logging
+driver so long-running simulations cannot create unbounded JSON logs.
+
+On Windows, reclaim unused VHDX space without pruning Docker data:
+
+```powershell
+.\scripts\stop.ps1
+.\scripts\reclaim-docker-space.ps1 -Force
+```
+
+The reclaim command refuses to proceed while any Docker container is running.
+It stops Docker Desktop and all WSL distributions, trims the Docker filesystem,
+allows Windows to compact the VHDX, and restarts Docker Desktop. Images,
+containers, volumes, and build cache are preserved.
+
 ## Quality checks
 
 Run repository linting from Bash, Git Bash, or WSL:
