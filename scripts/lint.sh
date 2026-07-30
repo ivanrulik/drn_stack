@@ -41,7 +41,33 @@ for path in (
 
 for path in Path("foxglove").glob("*.json"):
     with path.open(encoding="utf-8") as stream:
-        json.load(stream)
+        layout = json.load(stream)
+
+    panel_configs = layout["configById"]
+
+    def validate_panel_references(node):
+        if isinstance(node, str):
+            if node not in panel_configs:
+                raise ValueError(f"{path}: layout references missing panel {node!r}")
+            return
+        validate_panel_references(node["first"])
+        validate_panel_references(node["second"])
+
+    validate_panel_references(layout["layout"])
+
+    if path.name == "drn-simulation.json":
+        expected_teleop = {
+            "Teleop!horizontal": "/drn/control/teleop/xy",
+            "Teleop!verticalYaw": "/drn/control/teleop/z_yaw",
+        }
+        for panel_id, topic in expected_teleop.items():
+            panel = panel_configs[panel_id]
+            if panel["topic"] != topic:
+                raise ValueError(f"{path}: {panel_id} must publish to {topic}")
+            if panel["publishRate"] != 20 or not panel["autoSendStopOnRelease"]:
+                raise ValueError(
+                    f"{path}: {panel_id} must publish at 20 Hz and stop on release"
+                )
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

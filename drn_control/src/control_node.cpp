@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 
 #include <Eigen/Core>
+#include <algorithm>
 #include <cmath>
 #include <chrono>
 #include <cstdint>
@@ -30,7 +31,9 @@
 #include <utility>
 
 #include <drn_control/pose_conversion.hpp>
+#include <drn_control/teleop_control.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_command_ack.hpp>
 #include <px4_msgs/srv/vehicle_command.hpp>
@@ -52,6 +55,8 @@ namespace
 constexpr char kModeName[] = "DRN Control";
 constexpr char kStatusTopic[] = "/drn/control/status";
 constexpr char kSetpointTopic[] = "/drn/control/setpoint";
+constexpr char kHorizontalTeleopTopic[] = "/drn/control/teleop/xy";
+constexpr char kVerticalYawTeleopTopic[] = "/drn/control/teleop/z_yaw";
 
 float positiveParameter(rclcpp::Node & node, const std::string & name, double default_value)
 {
@@ -77,7 +82,14 @@ public:
     max_vertical_speed_m_s_(
       positiveParameter(node, "max_vertical_speed_m_s", 1.0)),
     max_heading_rate_rad_s_(
-      positiveParameter(node, "max_heading_rate_rad_s", 0.8))
+      positiveParameter(node, "max_heading_rate_rad_s", 0.8)),
+    teleop_timeout_s_(
+      positiveParameter(node, "teleop_timeout_s", 0.3)),
+    max_teleop_step_s_(
+      positiveParameter(node, "max_teleop_step_s", 0.1)),
+    teleop_command_mixer_(
+      std::chrono::milliseconds(
+        static_cast<std::chrono::milliseconds::rep>(teleop_timeout_s_ * 1000.0F)))
   {
     if (command_frame_.empty()) {
       throw std::invalid_argument("command_frame must not be empty");
@@ -95,12 +107,25 @@ public:
       [this](geometry_msgs::msg::PoseStamped::ConstSharedPtr message) {
         receiveSetpoint(*message);
       });
+    horizontal_teleop_subscription_ = node.create_subscription<geometry_msgs::msg::Twist>(
+      kHorizontalTeleopTopic,
+      rclcpp::QoS(1).reliable(),
+      [this](geometry_msgs::msg::Twist::ConstSharedPtr message) {
+        receiveHorizontalTeleop(*message);
+      });
+    vertical_yaw_teleop_subscription_ = node.create_subscription<geometry_msgs::msg::Twist>(
+      kVerticalYawTeleopTopic,
+      rclcpp::QoS(1).reliable(),
+      [this](geometry_msgs::msg::Twist::ConstSharedPtr message) {
+        receiveVerticalYawTeleop(*message);
+      });
 
     publishStatus("waiting_for_px4");
   }
 
   void onActivate() override
   {
+    cancelTeleopInput();
     if (captureCurrentTarget()) {
       publishStatus("holding");
     } else {
@@ -110,11 +135,27 @@ public:
 
   void onDeactivate() override
   {
+    cancelTeleopInput();
     target_.reset();
   }
 
-  void updateSetpoint(float) override
+  void updateSetpoint(float dt_s) override
   {
+    const auto now = TeleopCommandMixer::Clock::now();
+    const TeleopSample teleop = teleop_command_mixer_.sample(now);
+
+    if (!teleop.command.isZero()) {
+      applyTeleopCommand(teleop.command, dt_s);
+    } else if (teleop_commanding_) {
+      const bool holding = captureCurrentTarget();
+      teleop_commanding_ = false;
+      teleop_command_mixer_.clear();
+      publishStatus(
+        holding ?
+        (teleop.expired_nonzero ? "teleop_timeout" : "holding") :
+        "error: local position unavailable while stopping teleop");
+    }
+
     if (!target_.has_value()) {
       return;
     }
@@ -153,13 +194,142 @@ public:
     RCLCPP_INFO(node().get_logger(), "Control status: %s", status.c_str());
   }
 
+  void cancelTeleopInput()
+  {
+    teleop_command_mixer_.clear();
+    teleop_commanding_ = false;
+  }
+
 private:
+  bool teleopAllowed()
+  {
+    if (isActive() && isArmed()) {
+      return true;
+    }
+
+    RCLCPP_WARN_THROTTLE(
+      node().get_logger(),
+      *node().get_clock(),
+      2000,
+      "Ignoring teleop input: DRN Control must be active and armed");
+    return false;
+  }
+
+  void receiveHorizontalTeleop(const geometry_msgs::msg::Twist & message)
+  {
+    if (!teleopAllowed()) {
+      return;
+    }
+
+    std::string error;
+    auto command = parseHorizontalTeleop(message, max_horizontal_speed_m_s_, &error);
+    if (!command.has_value()) {
+      RCLCPP_WARN_THROTTLE(
+        node().get_logger(),
+        *node().get_clock(),
+        2000,
+        "Ignoring invalid %s: %s",
+        kHorizontalTeleopTopic,
+        error.c_str());
+      return;
+    }
+
+    teleop_command_mixer_.updateHorizontal(
+      *command,
+      TeleopCommandMixer::Clock::now());
+  }
+
+  void receiveVerticalYawTeleop(const geometry_msgs::msg::Twist & message)
+  {
+    if (!teleopAllowed()) {
+      return;
+    }
+
+    std::string error;
+    auto command = parseVerticalYawTeleop(
+      message,
+      max_vertical_speed_m_s_,
+      max_heading_rate_rad_s_,
+      &error);
+    if (!command.has_value()) {
+      RCLCPP_WARN_THROTTLE(
+        node().get_logger(),
+        *node().get_clock(),
+        2000,
+        "Ignoring invalid %s: %s",
+        kVerticalYawTeleopTopic,
+        error.c_str());
+      return;
+    }
+
+    teleop_command_mixer_.updateVerticalYaw(
+      *command,
+      TeleopCommandMixer::Clock::now());
+  }
+
+  void applyTeleopCommand(const BodyTeleopCommand & command, float dt_s)
+  {
+    if (!target_.has_value() && !captureCurrentTarget()) {
+      cancelTeleopInput();
+      publishStatus("error: local position unavailable for teleop");
+      return;
+    }
+
+    float heading = local_position_->heading();
+    if (!std::isfinite(heading) && target_->heading_rad.has_value()) {
+      heading = *target_->heading_rad;
+    }
+
+    const bool needs_heading =
+      std::abs(command.forward_m_s) > 1.0e-5F ||
+      std::abs(command.left_m_s) > 1.0e-5F ||
+      std::abs(command.yaw_rate_ccw_rad_s) > 1.0e-5F;
+    if (needs_heading && !std::isfinite(heading)) {
+      cancelTeleopInput();
+      publishStatus("error: heading unavailable for teleop");
+      return;
+    }
+
+    const float bounded_dt_s =
+      std::clamp(std::isfinite(dt_s) ? dt_s : 0.0F, 0.0F, max_teleop_step_s_);
+    const float conversion_heading = std::isfinite(heading) ? heading : 0.0F;
+    target_->position_m +=
+      bodyFluVelocityToNed(command, conversion_heading) * bounded_dt_s;
+    for (Eigen::Index index = 0; index < target_->position_m.size(); ++index) {
+      target_->position_m[index] = std::clamp(
+        target_->position_m[index],
+        -max_abs_position_m_,
+        max_abs_position_m_);
+    }
+
+    if (std::abs(command.yaw_rate_ccw_rad_s) > 1.0e-5F) {
+      const float target_heading =
+        target_->heading_rad.value_or(conversion_heading) -
+        command.yaw_rate_ccw_rad_s * bounded_dt_s;
+      target_->heading_rad = wrapAnglePi(target_heading);
+    }
+
+    if (!teleop_commanding_) {
+      teleop_commanding_ = true;
+      publishStatus("teleop_active");
+    }
+  }
+
   void receiveSetpoint(const geometry_msgs::msg::PoseStamped & message)
   {
     if (!isActive() || !isArmed()) {
       RCLCPP_WARN(
         node().get_logger(),
         "Ignoring %s: DRN Control must be active and armed",
+        kSetpointTopic);
+      return;
+    }
+
+    const auto now = TeleopCommandMixer::Clock::now();
+    if (teleop_command_mixer_.hasActiveCommand(now)) {
+      RCLCPP_WARN(
+        node().get_logger(),
+        "Ignoring %s while teleop is actively commanding movement",
         kSetpointTopic);
       return;
     }
@@ -185,6 +355,7 @@ private:
       return;
     }
 
+    cancelTeleopInput();
     target_ = std::move(target);
     publishStatus("tracking_setpoint");
   }
@@ -194,12 +365,20 @@ private:
   const float max_horizontal_speed_m_s_;
   const float max_vertical_speed_m_s_;
   const float max_heading_rate_rad_s_;
+  const float teleop_timeout_s_;
+  const float max_teleop_step_s_;
 
   std::shared_ptr<px4_ros2::MulticopterGotoSetpointType> goto_setpoint_;
   std::shared_ptr<px4_ros2::OdometryLocalPosition> local_position_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_publisher_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr setpoint_subscription_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr
+    horizontal_teleop_subscription_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr
+    vertical_yaw_teleop_subscription_;
   std::optional<NedSetpoint> target_;
+  TeleopCommandMixer teleop_command_mixer_;
+  bool teleop_commanding_{false};
 };
 
 class DrnControlExecutor : public px4_ros2::ModeExecutorBase
@@ -406,6 +585,7 @@ private:
       return;
     }
 
+    mode_.cancelTeleopInput();
     const std::uint64_t generation = ++generation_;
     mode_.publishStatus("arming");
     arm(
@@ -451,6 +631,7 @@ private:
 
     const std::uint64_t generation = ++generation_;
     if (mode_.isActive()) {
+      mode_.cancelTeleopInput();
       if (!mode_.captureCurrentTarget()) {
         response.success = false;
         response.message = "Local position is unavailable";
@@ -490,6 +671,7 @@ private:
       return;
     }
 
+    mode_.cancelTeleopInput();
     const std::uint64_t generation = ++generation_;
     mode_.publishStatus("landing");
     land(
@@ -516,6 +698,7 @@ private:
       return;
     }
 
+    mode_.cancelTeleopInput();
     const std::uint64_t generation = ++generation_;
     mode_.publishStatus("returning_to_launch");
     rtl(

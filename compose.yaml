@@ -24,7 +24,7 @@ services:
       FOXGLOVE_PORT: "${FOXGLOVE_PORT:-8765}"
       ODOMETRY_TOPIC: "/fmu/out/vehicle_odometry"
     ports:
-      - "${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"
+      - "${FOXGLOVE_HOST:-127.0.0.1}:${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"
     healthcheck:
       test: ["CMD", "/usr/local/bin/drn-ros-healthcheck"]
       interval: 5s

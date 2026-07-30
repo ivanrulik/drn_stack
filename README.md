@@ -31,6 +31,8 @@ When the readiness checks pass:
 - QGroundControl: listens for UDP on `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
 - DRN control status: `/drn/control/status`
+- Horizontal mouse control: `/drn/control/teleop/xy`
+- Altitude/yaw mouse control: `/drn/control/teleop/z_yaw`
 - Drone transform: `map -> base_link`
 
 Gazebo runs headless. Use Foxglove on the host for 3D visualization.
@@ -138,11 +140,20 @@ To fly in SITL:
    .\scripts\run.ps1 ros2 service call /drn/control/takeoff std_srvs/srv/Trigger '{}'
    ```
 
-4. In the imported Foxglove layout, use the 3D panel's pose publishing tool to
-   send an absolute target to `/drn/control/setpoint`. Targets use the ROS
-   `map` frame in ENU coordinates: x east, y north, and z up. Setpoints are
-   ignored unless the vehicle is armed and **DRN Control** is active.
-5. Land or return through PX4:
+4. In the imported Foxglove layout, press and hold the on-screen controls:
+
+   | Panel | Up | Down | Left | Right |
+   | --- | --- | --- | --- | --- |
+   | Horizontal | Forward | Backward | Strafe left | Strafe right |
+   | Altitude / Yaw | Ascend | Descend | Yaw left | Yaw right |
+
+   Movement is relative to the drone's current heading. Releasing the mouse
+   sends Stop, and the ROS controller independently holds position if command
+   messages stop for 300 ms.
+5. For an absolute target instead, use the 3D panel's pose publishing tool to
+   send a `map`-frame ENU pose to `/drn/control/setpoint`. Pose targets are
+   rejected while mouse teleoperation is actively commanding movement.
+6. Land or return through PX4:
 
    ```powershell
    .\scripts\run.ps1 ros2 service call /drn/control/land std_srvs/srv/Trigger '{}'
@@ -162,6 +173,7 @@ PX4_GZ_WORLD=default
 PX4_SIM_SPEED_FACTOR=1
 ROS_DOMAIN_ID=0
 FOXGLOVE_PORT=8765
+FOXGLOVE_HOST=127.0.0.1
 QGC_HOST=host.docker.internal
 QGC_PORT=14550
 ```
@@ -183,9 +195,21 @@ The default layout includes:
 - The `/robot_description` model, map grid, and `map -> base_link` transform.
 - Live NED position and velocity plots.
 - Vehicle and DRN control status inspectors.
+- Two mouse-operated Teleop panels for horizontal and altitude/yaw movement.
 - A pose publishing tool configured for `/drn/control/setpoint`.
 
 The ROS bridge publishes an identity `map -> base_link` transform until the first PX4 odometry message arrives.
+
+The Teleop panels publish at 20 Hz with conservative default speeds: 0.5 m/s
+horizontal, 0.3 m/s vertical, and 0.35 rad/s yaw. They do not activate the
+flight mode, arm, or take off. The center button stops that panel, and the ROS
+controller's command timeout remains authoritative if Foxglove disconnects.
+
+For safety, Docker binds Foxglove to `127.0.0.1` by default and the bridge
+accepts client publications only on the DRN setpoint and Teleop topics. To
+deliberately connect from another computer on a trusted LAN, set
+`FOXGLOVE_HOST=0.0.0.0` and use `ws://HOST_IP:8765`. Do not operate the control
+layout from multiple Foxglove clients at the same time.
 
 ## Troubleshooting
 

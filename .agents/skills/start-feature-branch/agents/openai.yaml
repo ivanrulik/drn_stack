@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Feature Branch"
+  short_description: "Research and safely start a feature branch"
+  default_prompt: "Use $start-feature-branch to assess and research a proposed feature before creating its branch."
