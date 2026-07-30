@@ -18,8 +18,8 @@ also continue to work in Linux, Git Bash, and WSL.
 
 - `compose.yaml`: two-service simulation topology
 - `docker/`: pinned PX4 and ROS images
-- `drn_control/`: flight-mode services, pose targets, and mouse Teleop adapter
-- `drn_viz/`: ROS launch files, TF bridge, and x500 model
+- `src/drn_control/`: flight-mode services, pose targets, and mouse Teleop adapter
+- `src/drn_viz/`: ROS launch files, TF bridge, and x500 model
 - `foxglove/drn-simulation.json`: importable default Foxglove layout
 - `scripts/`: matching PowerShell and Bash lifecycle and validation commands
 - `docs/DOCKER_PLAN.md`: architecture, implementation phases, and acceptance criteria
@@ -115,7 +115,10 @@ actually performed that SITL test.
 
 ## Git and review
 
-- Work on a `codex/` branch unless the user requests another branch name.
+- Never create branches with the `codex/` prefix.
+- Use a meaningful branch prefix that describes the work, such as `feature/`,
+  `fix/`, `patch/`, `docs/`, `refactor/`, or `chore/`, followed by a concise
+  lowercase hyphenated slug.
 - Preserve unrelated user changes in a dirty worktree.
 - Do not stage, commit, push, create a PR, or merge without explicit user
   authorization.

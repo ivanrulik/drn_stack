@@ -25,7 +25,14 @@ Foxglove connects to `ws://localhost:8765`.
 
 ## Native ROS workspace
 
-The Docker workflow is the supported project entrypoint. For package-only development in an existing ROS 2 Humble workspace, place `drn_viz`, matching `px4_msgs`, and `px4_ros_com` under the workspace's `src/` directory:
+The repository itself uses the conventional ROS 2 workspace layout, with
+`drn_viz` and `drn_control` under the root `src/` directory. The Docker workflow
+is the supported project entrypoint because it also supplies the pinned
+`px4_msgs`, `px4_ros_com`, and PX4 ROS 2 Interface Library dependencies.
+
+For package-only development in another ROS 2 Humble workspace, place
+`drn_viz`, `drn_control`, and matching upstream dependencies under that
+workspace's `src/` directory:
 
 ```bash
 source /opt/ros/humble/setup.bash
