@@ -4,8 +4,12 @@ Dockerized PX4 v1.17 SITL, Gazebo Harmonic, ROS 2 Humble, and Foxglove visualiza
 
 ![DRN Stack x500 Visualization](resources/drn_viz_x500.png)
 
-The formal architecture, implementation phases, and acceptance criteria are in
-[`docs/DOCKER_PLAN.md`](docs/DOCKER_PLAN.md).
+Project documentation:
+
+- [`docs/DOCKER_PLAN.md`](docs/DOCKER_PLAN.md): delivered architecture,
+  implementation phases, and acceptance criteria.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): ranked open-source ecosystem features
+  and proposed delivery phases.
 
 ## Quick start
 
