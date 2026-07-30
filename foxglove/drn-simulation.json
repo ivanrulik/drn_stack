@@ -161,6 +161,58 @@
       "diffEnabled": false,
       "fontSize": 14,
       "foxglovePanelTitle": "DRN Control Status"
+    },
+    "Teleop!horizontal": {
+      "topic": "/drn/control/teleop/xy",
+      "publishRate": 20,
+      "upButton": {
+        "field": "linear-x",
+        "value": 0.5
+      },
+      "downButton": {
+        "field": "linear-x",
+        "value": -0.5
+      },
+      "leftButton": {
+        "field": "linear-y",
+        "value": 0.5
+      },
+      "rightButton": {
+        "field": "linear-y",
+        "value": -0.5
+      },
+      "stopButton": {
+        "field": "linear-x",
+        "value": 0
+      },
+      "autoSendStopOnRelease": true,
+      "foxglovePanelTitle": "Horizontal (0.5 m/s)"
+    },
+    "Teleop!verticalYaw": {
+      "topic": "/drn/control/teleop/z_yaw",
+      "publishRate": 20,
+      "upButton": {
+        "field": "linear-z",
+        "value": 0.3
+      },
+      "downButton": {
+        "field": "linear-z",
+        "value": -0.3
+      },
+      "leftButton": {
+        "field": "angular-z",
+        "value": 0.35
+      },
+      "rightButton": {
+        "field": "angular-z",
+        "value": -0.35
+      },
+      "stopButton": {
+        "field": "linear-z",
+        "value": 0
+      },
+      "autoSendStopOnRelease": true,
+      "foxglovePanelTitle": "Altitude / Yaw"
     }
   },
   "globalVariables": {},
@@ -176,19 +228,29 @@
     "first": "3D!drnsim",
     "second": {
       "direction": "column",
-      "first": "Plot!position",
+      "first": {
+        "direction": "row",
+        "first": "Teleop!horizontal",
+        "second": "Teleop!verticalYaw",
+        "splitPercentage": 50
+      },
       "second": {
         "direction": "column",
-        "first": "Plot!velocity",
+        "first": {
+          "direction": "row",
+          "first": "Plot!position",
+          "second": "Plot!velocity",
+          "splitPercentage": 50
+        },
         "second": {
           "direction": "row",
           "first": "RawMessages!status",
           "second": "RawMessages!control",
           "splitPercentage": 50
         },
-        "splitPercentage": 48
+        "splitPercentage": 62
       },
-      "splitPercentage": 35
+      "splitPercentage": 34
     },
     "splitPercentage": 65
   }

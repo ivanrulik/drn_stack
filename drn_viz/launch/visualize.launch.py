@@ -49,6 +49,14 @@ def _launch_setup(context, *args, **kwargs):
                 {
                     'address': '0.0.0.0',
                     'port': foxglove_port,
+                    'client_topic_whitelist': [
+                        r'^/drn/control/setpoint$',
+                        r'^/drn/control/teleop/xy$',
+                        r'^/drn/control/teleop/z_yaw$',
+                    ],
+                    'service_whitelist': [
+                        r'^/drn/control/(activate|takeoff|hold|land|rtl)$',
+                    ],
                 }
             ],
         ),

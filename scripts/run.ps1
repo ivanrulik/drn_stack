@@ -59,16 +59,19 @@ $ComposeArgs = @(
     '--project-directory', $RepoRoot,
     '--file', (Join-Path $RepoRoot 'compose.yaml')
 )
-$ContainerCommand = @(
-    'exec', '-T', 'ros-viz',
-    'bash', '-lc',
-    @'
+$ContainerScript = @'
 set -Eeo pipefail
 source /opt/ros/humble/setup.bash
 source /opt/drn_ws/install/setup.bash
 set -u
 exec "$@"
-'@,
+'@
+$ContainerScript = $ContainerScript -replace "`r`n", "`n"
+
+$ContainerCommand = @(
+    'exec', '-T', 'ros-viz',
+    'bash', '-lc',
+    $ContainerScript,
     'bash'
 ) + $Command
 
