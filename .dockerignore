@@ -9,4 +9,4 @@ log
 **/*.pyc
 resources
 *.md
-!drn_viz/README.md
+!src/drn_viz/README.md

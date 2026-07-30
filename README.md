@@ -161,7 +161,8 @@ To fly in SITL:
    ```
 
 The complete topic and service contract, input validation, and recovery
-behavior are documented in [`drn_control/README.md`](drn_control/README.md).
+behavior are documented in
+[`src/drn_control/README.md`](src/drn_control/README.md).
 
 ## Configuration
 
@@ -252,6 +253,17 @@ This does not remove unrelated Docker images or the global Docker build cache.
 
 ## Development
 
-`run-sim` always invokes a cached Compose build. Changes under `drn_control/`
-or `drn_viz/` invalidate only the relevant ROS image layers, rebuild the
-workspace, and recreate the changed service.
+The repository root follows the standard colcon workspace layout. Project ROS
+packages live under `src/`, while Docker, Compose, lifecycle scripts, and
+Foxglove configuration remain at the workspace root:
+
+```text
+src/
+├── drn_control/
+└── drn_viz/
+```
+
+The Docker build adds the pinned PX4 dependencies to the same source space
+inside `/opt/drn_ws`. `run-sim` always invokes a cached Compose build. Changes
+under `src/drn_control/` or `src/drn_viz/` invalidate the relevant ROS image
+layers, rebuild the workspace, and recreate the changed service.
