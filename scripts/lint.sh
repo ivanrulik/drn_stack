@@ -32,12 +32,77 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree
 
-for path in (
+package_paths = (
     Path("src/drn_control/package.xml"),
     Path("src/drn_viz/package.xml"),
-    *Path("src/drn_viz/urdf").glob("*.urdf"),
-):
+)
+
+for path in (*package_paths, *Path("src/drn_viz/urdf").glob("*.urdf")):
     ElementTree.parse(path)
+
+required_files = (
+    Path("LICENSE"),
+    Path("THIRD_PARTY_NOTICES.md"),
+    Path("CONTRIBUTING.md"),
+    Path("SUPPORT.md"),
+    Path("SECURITY.md"),
+    Path("docs/COMPATIBILITY.md"),
+    Path("docs/RELEASE_POLICY.md"),
+    Path("src/drn_viz/meshes/LICENSE"),
+)
+for path in required_files:
+    if not path.is_file():
+        raise ValueError(f"required adoption file is missing: {path}")
+
+expected_licenses = {
+    "drn_control": {"MIT"},
+    "drn_viz": {"MIT", "BSD-3-Clause"},
+}
+package_versions = set()
+for path in package_paths:
+    package = ElementTree.parse(path).getroot()
+    name = package.findtext("name")
+    version = package.findtext("version")
+    maintainers = package.findall("maintainer")
+    licenses = {element.text for element in package.findall("license")}
+
+    if not version or version == "0.0.0":
+        raise ValueError(f"{path}: package version must be a non-placeholder value")
+    package_versions.add(version)
+
+    if not maintainers:
+        raise ValueError(f"{path}: at least one maintainer is required")
+    for maintainer in maintainers:
+        email = maintainer.attrib.get("email", "")
+        if (
+            not maintainer.text
+            or "@" not in email
+            or email.endswith("@todo.todo")
+        ):
+            raise ValueError(f"{path}: maintainer metadata contains a placeholder")
+
+    if licenses != expected_licenses[name]:
+        raise ValueError(
+            f"{path}: expected licenses {expected_licenses[name]}, found {licenses}"
+        )
+
+if len(package_versions) != 1:
+    raise ValueError(f"ROS package versions must stay synchronized: {package_versions}")
+
+expected_refs = {
+    "PX4_REF": "a5eb12d2ab591251faa009f76b2685b8cc64405d",
+    "PX4_MSGS_REF": "35a005a86b82cae28bd7a2eb58c4bb7a840830c9",
+    "PX4_ROS_COM_REF": "86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af",
+    "PX4_ROS2_INTERFACE_REF": "4a3370f084ac6f1ef001a4afa2b007845ffd0837",
+    "MICRO_XRCE_DDS_AGENT_REF": "73622810d984349b80bbac0ef55fc0b694d62222",
+}
+compose = Path("compose.yaml").read_text(encoding="utf-8")
+compatibility = Path("docs/COMPATIBILITY.md").read_text(encoding="utf-8")
+for name, revision in expected_refs.items():
+    if f"{name}: {revision}" not in compose:
+        raise ValueError(f"compose.yaml: expected {name} pin {revision}")
+    if revision not in compatibility:
+        raise ValueError(f"docs/COMPATIBILITY.md: missing {name} pin {revision}")
 
 for path in Path("foxglove").glob("*.json"):
     with path.open(encoding="utf-8") as stream:

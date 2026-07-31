@@ -4,7 +4,7 @@
   <name>drn_control</name>
   <version>0.1.0</version>
   <description>Operator-facing PX4 external mode controls for the DRN simulation stack.</description>
-  <maintainer email="ivanrulik@todo.todo">ivanrulik</maintainer>
+  <maintainer email="49820318+ivanrulik@users.noreply.github.com">Ivan Rulik</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
