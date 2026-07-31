@@ -10,6 +10,17 @@ Project documentation:
   implementation phases, and acceptance criteria.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): ranked open-source ecosystem features
   and proposed delivery phases.
+- [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md): supported upstream
+  baseline and validation policy.
+- [`docs/RELEASE_POLICY.md`](docs/RELEASE_POLICY.md): versioning, release
+  gates, and support window.
+
+Community and project policies:
+
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Security](SECURITY.md)
+- [License](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Quick start
 

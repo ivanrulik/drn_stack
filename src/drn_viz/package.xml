@@ -2,10 +2,11 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>drn_viz</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>ROS 2 visualization package for the PX4 x500 model in Foxglove.</description>
-  <maintainer email="ivanrulik@todo.todo">ivanrulik</maintainer>
+  <maintainer email="49820318+ivanrulik@users.noreply.github.com">Ivan Rulik</maintainer>
   <license>MIT</license>
+  <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

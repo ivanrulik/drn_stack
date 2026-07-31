@@ -167,10 +167,13 @@ supported until that behavior is validated.
 
 ### Phase 0: Open-source adoption foundation
 
-- Add a root license file matching the package metadata.
-- Replace placeholder maintainer addresses and normalize package versions.
-- Add contribution, support, and security guidance.
-- Define the compatibility and release policy for pinned upstream components.
+Status: complete.
+
+- [x] Add a root license file matching the package metadata.
+- [x] Replace placeholder maintainer addresses and normalize package versions.
+- [x] Add contribution, support, and security guidance.
+- [x] Define the compatibility and release policy for pinned upstream
+  components.
 
 ### Phase 1: Extension contract
 
