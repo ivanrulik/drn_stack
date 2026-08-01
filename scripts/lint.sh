@@ -21,12 +21,21 @@ mapfile -t shell_files < <(find scripts -type f -name '*.sh' -print | sort)
 shellcheck --external-sources "${shell_files[@]}"
 
 mapfile -t yaml_files < <(find .github -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
+mapfile -t project_yaml_files < <(find projects -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
+yaml_files+=("${project_yaml_files[@]}")
 yaml_files+=(compose.yaml .yamllint.yml)
 yamllint --strict "${yaml_files[@]}"
 
 docker compose --project-name drn-stack --file compose.yaml config --quiet
 
-python3 -m compileall -q src/drn_viz/launch
+python3 -m compileall -q \
+  src/drn_viz/launch \
+  scripts/docker/project-sdk.py \
+  projects/example_inspection/ros_ws/src/drn_example_inspection
+python3 -m unittest discover -s tests
+python3 scripts/docker/project-sdk.py validate \
+  projects/example_inspection/project.yaml \
+  projects/example_inspection/scenarios/startup-health.yaml
 python3 - <<'PY'
 import json
 from pathlib import Path
@@ -39,6 +48,11 @@ package_paths = (
 
 for path in (*package_paths, *Path("src/drn_viz/urdf").glob("*.urdf")):
     ElementTree.parse(path)
+ElementTree.parse(
+    Path(
+        "projects/example_inspection/ros_ws/src/drn_example_inspection/package.xml"
+    )
+)
 
 required_files = (
     Path("LICENSE"),
@@ -48,6 +62,7 @@ required_files = (
     Path("SECURITY.md"),
     Path("docs/COMPATIBILITY.md"),
     Path("docs/RELEASE_POLICY.md"),
+    Path("docs/PROJECT_SDK.md"),
     Path("src/drn_viz/meshes/LICENSE"),
 )
 for path in required_files:

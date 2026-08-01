@@ -1,0 +1,13 @@
+services:
+  ros-viz:
+    image: drn-stack/example-inspection:humble
+    build:
+      context: ${DRN_PROJECT_DIR:?Set DRN_PROJECT_DIR to the absolute project directory}
+      dockerfile: Dockerfile
+    environment:
+      DRN_PROJECT_MANIFEST: /opt/drn_project/project.yaml
+    volumes:
+      - type: bind
+        source: ${DRN_PROJECT_DIR:?Set DRN_PROJECT_DIR to the absolute project directory}
+        target: /opt/drn_project
+        read_only: true

@@ -1,0 +1,18 @@
+schema_version: 1
+name: example-inspection
+simulation:
+  vehicle: gz_x500
+  world: default
+launch:
+  package: drn_example_inspection
+  file: inspection.launch.py
+  arguments:
+    heartbeat_period: 1.0
+health:
+  nodes:
+    - /drn_example_inspection
+  topics:
+    - /drn/example_inspection/heartbeat
+  services: []
+scenarios:
+  - startup-health

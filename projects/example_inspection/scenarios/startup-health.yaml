@@ -1,0 +1,12 @@
+schema_version: 1
+name: startup-health
+timeout_seconds: 480
+setup:
+  - type: core-smoke
+actions: []
+assertions:
+  - type: project-health
+  - type: topic-message
+    name: /drn/example_inspection/heartbeat
+cleanup:
+  - type: stop-stack

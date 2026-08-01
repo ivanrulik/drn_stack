@@ -23,8 +23,7 @@ command -v docker >/dev/null 2>&1 || {
 
 MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T ros-viz bash -lc '
   set -Eeo pipefail
-  source /opt/ros/humble/setup.bash
-  source /opt/drn_ws/install/setup.bash
+  source /usr/local/bin/drn-ros-environment
   set -u
   exec "$@"
 ' bash "$@"
