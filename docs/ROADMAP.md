@@ -1,6 +1,6 @@
 # Open-source Ecosystem Roadmap
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-07-31
 
 ## Purpose
 
@@ -177,9 +177,11 @@ Status: complete.
 
 ### Phase 1: Extension contract
 
-- Deliver the project manifest, Compose/colcon extension path, and inert
+Status: complete.
+
+- [x] Deliver the project manifest, Compose/colcon extension path, and inert
   scenario runner.
-- Publish one minimal downstream-project example.
+- [x] Publish one minimal downstream-project example.
 
 ### Phase 2: Evidence and regression workflow
 

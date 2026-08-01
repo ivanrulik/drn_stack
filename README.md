@@ -14,6 +14,8 @@ Project documentation:
   baseline and validation policy.
 - [`docs/RELEASE_POLICY.md`](docs/RELEASE_POLICY.md): versioning, release
   gates, and support window.
+- [`docs/PROJECT_SDK.md`](docs/PROJECT_SDK.md): downstream ROS 2 overlay and
+  inert scenario contract.
 
 Community and project policies:
 
@@ -64,8 +66,23 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Restart without rebuilding | `.\scripts\restart.ps1` | `bash ./scripts/restart.sh` |
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
+| Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
+
+## Project extensions
+
+Downstream ROS 2 packages can extend the pinned DRN workspace through a
+derivative colcon-overlay image and Compose override. A versioned project
+manifest selects the PX4 model, world, ROS launch entrypoint, and expected
+health signals. Schema version 1 scenarios run only the existing disarmed smoke
+test and read-only ROS graph or topic assertions; they cannot execute commands
+or command a vehicle.
+
+The runnable example lives under
+[`projects/example_inspection`](projects/example_inspection). See the
+[`project and scenario extension contract`](docs/PROJECT_SDK.md) before adding
+a downstream project.
 
 ## Docker storage safety
 

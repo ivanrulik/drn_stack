@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -Eeo pipefail
 
-source /opt/ros/humble/setup.bash
-source /opt/drn_ws/install/setup.bash
+source /usr/local/bin/drn-ros-environment
 set -u
 
 foxglove_listening() {

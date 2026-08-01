@@ -63,6 +63,7 @@ RUN apt-get update \
         libtinyxml2-9 \
         netcat-openbsd \
         procps \
+        python3-yaml \
         ros-humble-eigen3-cmake-module \
         ros-humble-foxglove-bridge \
         ros-humble-joint-state-publisher \
@@ -71,11 +72,15 @@ RUN apt-get update \
 
 COPY --from=builder /usr/local/ /usr/local/
 COPY --from=builder /opt/drn_ws/install/ /opt/drn_ws/install/
+COPY scripts/docker/project-sdk.py /usr/local/bin/drn-project
+COPY scripts/docker/ros-environment.sh /usr/local/bin/drn-ros-environment
 COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
 COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
 COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
 
 RUN chmod 0755 \
+        /usr/local/bin/drn-project \
+        /usr/local/bin/drn-ros-environment \
         /usr/local/bin/drn-ros-entrypoint \
         /usr/local/bin/drn-ros-healthcheck \
         /usr/local/bin/drn-smoke-test \

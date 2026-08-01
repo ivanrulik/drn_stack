@@ -1,0 +1,5 @@
+compose.override.yaml
+project.yaml
+scenarios/
+**/__pycache__/
+**/*.pyc

@@ -41,3 +41,8 @@ jobs:
       - name: Stop stack
         if: always()
         run: docker compose --project-name drn-stack -f compose.yaml down --remove-orphans --volumes --timeout 30
+
+      - name: Run inert downstream-project scenario
+        env:
+          DRN_MIN_HOST_FREE_GB: "0"
+        run: bash scripts/run-scenario.sh projects/example_inspection startup-health
