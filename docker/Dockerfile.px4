@@ -43,6 +43,7 @@ RUN sed -i \
 RUN make -j"${BUILD_JOBS}" px4_sitl_default
 
 COPY scripts/docker/px4-entrypoint.sh /usr/local/bin/drn-px4-entrypoint
-RUN chmod 0755 /usr/local/bin/drn-px4-entrypoint
+COPY scripts/docker/px4-failure.py /usr/local/bin/drn-px4-failure
+RUN chmod 0755 /usr/local/bin/drn-px4-entrypoint /usr/local/bin/drn-px4-failure
 
 ENTRYPOINT ["/usr/local/bin/drn-px4-entrypoint"]

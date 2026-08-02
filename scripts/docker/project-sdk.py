@@ -16,7 +16,8 @@ from xml.etree import ElementTree
 import yaml
 
 
-SCHEMA_VERSION = 1
+PROJECT_SCHEMA_VERSION = 1
+SCENARIO_SCHEMA_VERSIONS = {1, 2}
 SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 ROS_PACKAGE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -99,9 +100,9 @@ def _load_yaml(path: Path, label: str) -> dict[str, Any]:
 def load_manifest(path: Path) -> dict[str, Any]:
     manifest = _load_yaml(path, "project manifest")
     _require_exact_keys(manifest, MANIFEST_KEYS, "project manifest")
-    if manifest["schema_version"] != SCHEMA_VERSION:
+    if manifest["schema_version"] != PROJECT_SCHEMA_VERSION:
         raise ConfigurationError(
-            f"project manifest schema_version must be {SCHEMA_VERSION}"
+            f"project manifest schema_version must be {PROJECT_SCHEMA_VERSION}"
         )
 
     _require_string(manifest["name"], "project manifest name", SLUG_PATTERN)
@@ -139,8 +140,12 @@ def load_manifest(path: Path) -> dict[str, Any]:
 def load_scenario(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     scenario = _load_yaml(path, "scenario")
     _require_exact_keys(scenario, SCENARIO_KEYS, "scenario")
-    if scenario["schema_version"] != SCHEMA_VERSION:
-        raise ConfigurationError(f"scenario schema_version must be {SCHEMA_VERSION}")
+    schema_version = scenario["schema_version"]
+    if schema_version not in SCENARIO_SCHEMA_VERSIONS:
+        supported = ", ".join(str(version) for version in sorted(SCENARIO_SCHEMA_VERSIONS))
+        raise ConfigurationError(
+            f"scenario schema_version must be one of: {supported}"
+        )
 
     name = _require_string(scenario["name"], "scenario name", SLUG_PATTERN)
     if name not in manifest["scenarios"]:
@@ -165,10 +170,30 @@ def load_scenario(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
         )
 
     actions = scenario["actions"]
-    if actions != []:
-        raise ConfigurationError(
-            "schema version 1 is inert; actions must be an empty list"
+    if schema_version == 1:
+        if actions != []:
+            raise ConfigurationError(
+                "schema version 1 is inert; actions must be an empty list"
+            )
+    else:
+        if not isinstance(actions, list) or len(actions) != 1:
+            raise ConfigurationError(
+                "schema version 2 requires exactly one operator action"
+            )
+        action = _require_mapping(actions[0], "actions[0]")
+        _require_exact_keys(
+            action,
+            {"type", "component", "failure_type"},
+            "actions[0]",
         )
+        if action != {
+            "type": "inject-failure",
+            "component": "battery",
+            "failure_type": "off",
+        }:
+            raise ConfigurationError(
+                "schema version 2 only supports inject-failure battery off"
+            )
 
     assertions = scenario["assertions"]
     if not isinstance(assertions, list) or not assertions:
@@ -194,9 +219,18 @@ def load_scenario(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
                 f"assertions[{index}].type is not supported: {assertion_type!r}"
             )
 
-    if scenario["cleanup"] != [{"type": "stop-stack"}]:
+    cleanup = scenario["cleanup"]
+    if schema_version == 1:
+        if cleanup != [{"type": "stop-stack"}]:
+            raise ConfigurationError(
+                "cleanup must contain exactly one stop-stack action"
+            )
+    elif cleanup != [
+        {"type": "restore-failure", "component": "battery"},
+        {"type": "stop-stack"},
+    ]:
         raise ConfigurationError(
-            "cleanup must contain exactly one stop-stack action"
+            "schema version 2 cleanup must restore battery before stop-stack"
         )
     return scenario
 
@@ -349,9 +383,13 @@ def _wait_for_project_health(manifest: dict[str, Any], deadline: float) -> None:
         time.sleep(1)
 
 
-def run_scenario(manifest: dict[str, Any], scenario: dict[str, Any]) -> None:
-    deadline = time.monotonic() + scenario["timeout_seconds"]
+def _run_setup(deadline: float) -> None:
     _run(["/usr/local/bin/drn-smoke-test", "full"], deadline)
+
+
+def _run_assertions(
+    manifest: dict[str, Any], scenario: dict[str, Any], deadline: float
+) -> None:
     for assertion in scenario["assertions"]:
         if assertion["type"] == "project-health":
             _wait_for_project_health(manifest, deadline)
@@ -359,6 +397,47 @@ def run_scenario(manifest: dict[str, Any], scenario: dict[str, Any]) -> None:
             _run(
                 ["ros2", "topic", "echo", "--once", assertion["name"]], deadline
             )
+
+
+def run_scenario(manifest: dict[str, Any], scenario: dict[str, Any]) -> None:
+    if scenario["schema_version"] != 1:
+        raise ConfigurationError(
+            "operator scenarios must run through scripts/run-scenario with an explicit gate"
+        )
+    deadline = time.monotonic() + scenario["timeout_seconds"]
+    _run_setup(deadline)
+    _run_assertions(manifest, scenario, deadline)
+
+
+def run_phase(
+    manifest: dict[str, Any],
+    scenario: dict[str, Any],
+    phase: str,
+    deadline_unix: float,
+) -> None:
+    remaining = deadline_unix - time.time()
+    if remaining <= 0:
+        raise TimeoutError("scenario timed out")
+    deadline = time.monotonic() + remaining
+    if phase == "setup":
+        _run_setup(deadline)
+    else:
+        _run_assertions(manifest, scenario, deadline)
+
+
+def operator_action_lines(scenario: dict[str, Any]) -> list[str]:
+    return [
+        f"{action['component']} {action['failure_type']}"
+        for action in scenario["actions"]
+    ]
+
+
+def restoration_lines(scenario: dict[str, Any]) -> list[str]:
+    return [
+        action["component"]
+        for action in scenario["cleanup"]
+        if action["type"] == "restore-failure"
+    ]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -379,6 +458,29 @@ def _parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="run an inert scenario")
     run.add_argument("manifest", type=Path)
     run.add_argument("scenario", type=Path)
+
+    inspect = subparsers.add_parser("inspect", help="read validated scenario metadata")
+    inspect.add_argument("manifest", type=Path)
+    inspect.add_argument("scenario", type=Path)
+    inspect.add_argument("field", choices=("operator-gate", "timeout-seconds"))
+
+    actions = subparsers.add_parser("actions", help="print validated operator actions")
+    actions.add_argument("manifest", type=Path)
+    actions.add_argument("scenario", type=Path)
+
+    restorations = subparsers.add_parser(
+        "restorations", help="print validated failure restorations"
+    )
+    restorations.add_argument("manifest", type=Path)
+    restorations.add_argument("scenario", type=Path)
+
+    run_phase_parser = subparsers.add_parser(
+        "run-phase", help="run one phase of an operator-gated scenario"
+    )
+    run_phase_parser.add_argument("manifest", type=Path)
+    run_phase_parser.add_argument("scenario", type=Path)
+    run_phase_parser.add_argument("phase", choices=("setup", "assertions"))
+    run_phase_parser.add_argument("--deadline-unix", type=float, required=True)
     return parser
 
 
@@ -403,6 +505,24 @@ def main(argv: list[str] | None = None) -> int:
             manifest, scenario = validate_contract(args.manifest, args.scenario)
             run_scenario(manifest, scenario)
             print(f"Scenario {scenario['name']} passed.")
+        elif args.command == "inspect":
+            _, scenario = validate_contract(args.manifest, args.scenario)
+            if args.field == "operator-gate":
+                print("required" if scenario["schema_version"] == 2 else "inert")
+            else:
+                print(scenario["timeout_seconds"])
+        elif args.command == "actions":
+            _, scenario = validate_contract(args.manifest, args.scenario)
+            for line in operator_action_lines(scenario):
+                print(line)
+        elif args.command == "restorations":
+            _, scenario = validate_contract(args.manifest, args.scenario)
+            for line in restoration_lines(scenario):
+                print(line)
+        elif args.command == "run-phase":
+            manifest, scenario = validate_contract(args.manifest, args.scenario)
+            run_phase(manifest, scenario, args.phase, args.deadline_unix)
+            print(f"Scenario {scenario['name']} {args.phase} phase passed.")
     except (ConfigurationError, OSError, RuntimeError, TimeoutError) as error:
         print(f"drn-project: {error}", file=sys.stderr)
         return 1

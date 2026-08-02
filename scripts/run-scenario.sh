@@ -7,30 +7,39 @@ BASE_IMAGE="drn-stack/ros-viz:humble"
 PX4_IMAGE="drn-stack/px4-sitl:v1.17.0"
 
 usage() {
-  echo "Usage: $0 <project-directory> <scenario> [--evidence]" >&2
+  echo "Usage: $0 <project-directory> <scenario> [--evidence] [--allow-operator-actions]" >&2
 }
 
-if (( $# < 2 || $# > 3 )); then
+if (( $# < 2 || $# > 4 )); then
   usage
   exit 2
 fi
 
 project_input="$1"
 scenario="$2"
-evidence_argument="${3:-}"
-if [[ -n "${evidence_argument}" && "${evidence_argument}" != "--evidence" ]]; then
-  usage
-  exit 2
-fi
+shift 2
 evidence_setting="${DRN_EVIDENCE:-0}"
 if [[ ! "${evidence_setting}" =~ ^[01]$ ]]; then
   echo "DRN_EVIDENCE must be 0 or 1; got '${evidence_setting}'." >&2
   exit 2
 fi
 evidence_enabled="${evidence_setting}"
-if [[ "${evidence_argument}" == "--evidence" ]]; then
-  evidence_enabled=1
-fi
+operator_actions_allowed=0
+while (( $# )); do
+  case "$1" in
+    --evidence)
+      evidence_enabled=1
+      ;;
+    --allow-operator-actions)
+      operator_actions_allowed=1
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+  shift
+done
 if [[ ! "${scenario}" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]]; then
   echo "Scenario must be a lowercase hyphenated name; got '${scenario}'." >&2
   exit 2
@@ -64,6 +73,7 @@ container_scenario="/opt/drn_project/scenarios/${scenario}.yaml"
 stack_owned=0
 succeeded=0
 recording_started=0
+failure_actions_started=0
 evidence_initialized=0
 evidence_root=""
 run_dir=""
@@ -73,6 +83,10 @@ project_name=""
 ros_image="unavailable"
 ros_image_id="unavailable"
 px4_image_id="unavailable"
+operator_gate="inert"
+scenario_timeout=0
+operator_actions=()
+failure_restorations=()
 evidence_max_bytes="${DRN_EVIDENCE_MAX_BYTES:-1073741824}"
 evidence_retention_count="${DRN_EVIDENCE_RETENTION_COUNT:-5}"
 
@@ -113,13 +127,49 @@ evidence_run() {
     ' bash "$@"
 }
 
+scenario_exec() {
+  MSYS_NO_PATHCONV=1 project_compose exec -T ros-viz bash -lc '
+    source /usr/local/bin/drn-ros-environment
+    set -u
+    exec "$@"
+  ' bash /usr/local/bin/drn-project "$@"
+}
+
+px4_failure() {
+  MSYS_NO_PATHCONV=1 project_compose exec -T \
+    -e DRN_OPERATOR_ACTIONS=1 \
+    px4-sitl /usr/local/bin/drn-px4-failure "$@"
+}
+
+run_logged() {
+  if (( evidence_initialized )); then
+    "$@" 2>&1 | tee -a "${run_dir}/logs/scenario.log"
+  else
+    "$@"
+  fi
+}
+
 cleanup() {
   local status=$?
   local verdict="failed"
   local finished_at=""
+  local restoration=""
+  local restoration_failed=0
   local -a finalize_args=()
   trap - EXIT
   if (( stack_owned )); then
+    if (( failure_actions_started )); then
+      for restoration in "${failure_restorations[@]}"; do
+        if ! run_logged px4_failure restore "${restoration}"; then
+          echo "PX4 failure restoration did not verify cleanly." >&2
+          restoration_failed=1
+          status=1
+        fi
+      done
+      if (( ! restoration_failed )); then
+        failure_actions_started=0
+      fi
+    fi
     if (( recording_started )); then
       if ! evidence_exec stop /opt/drn_artifacts; then
         echo "Evidence recorder did not finalize cleanly." >&2
@@ -230,6 +280,31 @@ echo "Building the pinned DRN base image..."
 base_compose build ros-viz
 project_tool validate "${container_manifest}" "${container_scenario}"
 
+operator_gate="$(
+  project_tool inspect \
+    "${container_manifest}" "${container_scenario}" operator-gate
+)"
+if [[ "${operator_gate}" == "required" ]]; then
+  if (( ! operator_actions_allowed )); then
+    echo "Scenario '${scenario}' contains operator actions." >&2
+    echo "Re-run with --allow-operator-actions after confirming disarmed SITL use." >&2
+    exit 2
+  fi
+  scenario_timeout="$(
+    project_tool inspect \
+      "${container_manifest}" "${container_scenario}" timeout-seconds
+  )"
+  action_output="$(
+    project_tool actions "${container_manifest}" "${container_scenario}"
+  )"
+  restoration_output="$(
+    project_tool restorations "${container_manifest}" "${container_scenario}"
+  )"
+  mapfile -t operator_actions <<<"${action_output}"
+  mapfile -t failure_restorations <<<"${restoration_output}"
+  echo "Operator gate accepted for disarmed SITL scenario '${scenario}'."
+fi
+
 export DRN_PROJECT_DIR="${PROJECT_ROOT}"
 project_name="$(project_tool get "${container_manifest}" name)"
 PX4_SIM_MODEL="$(project_tool get "${container_manifest}" vehicle)"
@@ -263,6 +338,7 @@ if (( evidence_enabled )); then
   PROJECT_COMPOSE+=(--file "${REPO_ROOT}/compose.evidence.yaml")
   started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   evidence_initialized=1
+  : >"${run_dir}/logs/scenario.log"
 fi
 
 project_compose config --quiet
@@ -279,20 +355,25 @@ if (( evidence_enabled )); then
   evidence_exec start /opt/drn_artifacts "${container_manifest}"
   recording_started=1
 fi
-if (( evidence_enabled )); then
-  MSYS_NO_PATHCONV=1 project_compose exec -T ros-viz bash -lc '
-    source /usr/local/bin/drn-ros-environment
-    set -u
-    exec "$@"
-  ' bash /usr/local/bin/drn-project run \
-    "${container_manifest}" "${container_scenario}" 2>&1 |
-    tee "${run_dir}/logs/scenario.log"
+if [[ "${operator_gate}" == "required" ]]; then
+  deadline_unix="$(($(date +%s) + scenario_timeout))"
+  run_logged scenario_exec run-phase \
+    "${container_manifest}" "${container_scenario}" setup \
+    --deadline-unix "${deadline_unix}"
+  for action in "${operator_actions[@]}"; do
+    read -r component failure_type extra <<<"${action}"
+    if [[ -n "${extra:-}" ]]; then
+      echo "Invalid validated action output: ${action}" >&2
+      exit 1
+    fi
+    failure_actions_started=1
+    run_logged px4_failure apply "${component}" "${failure_type}"
+  done
+  run_logged scenario_exec run-phase \
+    "${container_manifest}" "${container_scenario}" assertions \
+    --deadline-unix "${deadline_unix}"
 else
-  MSYS_NO_PATHCONV=1 project_compose exec -T ros-viz bash -lc '
-    source /usr/local/bin/drn-ros-environment
-    set -u
-    exec "$@"
-  ' bash /usr/local/bin/drn-project run "${container_manifest}" "${container_scenario}"
+  run_logged scenario_exec run "${container_manifest}" "${container_scenario}"
 fi
 succeeded=1
 echo "Scenario '${scenario}' passed; stopping the isolated stack."

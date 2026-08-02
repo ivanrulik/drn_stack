@@ -1,9 +1,9 @@
 # Project and scenario extension contract
 
-DRN Stack projects add downstream ROS 2 packages and inert validation scenarios
-without copying or modifying the core workspace. Schema version 1 deliberately
-supports health validation only. It has no manifest field that can arm, move,
-land, or otherwise command a vehicle.
+DRN Stack projects add downstream ROS 2 packages and versioned validation
+scenarios without copying or modifying the core workspace. Schema version 1
+remains strictly inert. Schema version 2 adds one disarmed, operator-gated PX4
+SITL battery-failure action; it cannot arm, move, land, or target hardware.
 
 ## Run the example
 
@@ -32,6 +32,18 @@ bash ./scripts/run-scenario.sh projects/example_inspection startup-health --evid
 Evidence capture does not expand the scenario action schema or change its
 inert safety boundary. See [`docs/EVIDENCE_PACKS.md`](EVIDENCE_PACKS.md).
 
+To run the operator-gated example and capture its evidence:
+
+```powershell
+.\scripts\run-scenario.ps1 projects\example_inspection battery-failure `
+    -AllowOperatorActions -Evidence
+```
+
+```bash
+bash ./scripts/run-scenario.sh projects/example_inspection battery-failure \
+  --allow-operator-actions --evidence
+```
+
 The runner:
 
 1. Checks Docker, host storage, ports, and whether another `drn-stack` project
@@ -41,7 +53,10 @@ The runner:
 4. Builds the project's derivative colcon-overlay image.
 5. Starts the stack with the base and project Compose files merged.
 6. Runs the existing full smoke test and project assertions.
-7. Prints bounded logs on failure and always stops its containers.
+7. For schema version 2 only, requires the operator flag, verifies that PX4 is
+   disarmed, applies and measures the allowlisted failure, then verifies its
+   restoration during cleanup.
+8. Prints bounded logs on failure and always stops its containers.
 
 When evidence is enabled, the runner also starts a topic-allowlisted MCAP
 recording before the assertions, captures PX4's boot ULog, and finalizes a
@@ -143,7 +158,45 @@ Version 1 accepts exactly:
 
 The timeout covers the core smoke test and all project assertions. There is no
 arbitrary command, script, service-call, or topic-publication primitive.
-Flight and failure-injection scenarios remain future operator-gated work.
+
+## Operator-gated failure schema
+
+Schema version 2 is intentionally limited to one measurable, disarmed PX4 SITL
+battery failure:
+
+```yaml
+schema_version: 2
+name: battery-failure
+timeout_seconds: 480
+setup:
+  - type: core-smoke
+actions:
+  - type: inject-failure
+    component: battery
+    failure_type: "off"
+assertions:
+  - type: project-health
+  - type: topic-message
+    name: /my_project/heartbeat
+cleanup:
+  - type: restore-failure
+    component: battery
+  - type: stop-stack
+```
+
+The runner rejects this schema unless PowerShell receives
+`-AllowOperatorActions` or Bash receives `--allow-operator-actions`. The PX4
+adapter independently requires its internal gate, confirms
+`SYS_FAILURE_EN=1`, and refuses to inject unless PX4 reports the disarmed
+arming state. A battery `off` action passes only after voltage falls to the
+expected simulated-failure range. Cleanup always attempts `battery ok` and
+passes only after normal voltage returns. The run also fails if PX4's
+`armed_time` shows that it armed at any point during the scenario.
+
+Version 2 does not accept GPS, motor, sensor, arbitrary PX4-shell, arming,
+takeoff, movement, Land, RTL, or hardware actions. Additional primitives need
+their own version-matched compatibility research, measurable effect assertion,
+cleanup contract, and explicit review.
 
 ## Colcon overlay image
 
@@ -172,7 +225,10 @@ Contract changes require:
 bash ./scripts/lint.sh
 bash ./scripts/test-ros-build.sh
 bash ./scripts/run-scenario.sh projects/example_inspection startup-health
+bash ./scripts/run-scenario.sh projects/example_inspection battery-failure \
+  --allow-operator-actions --evidence
 ```
 
-The final command is an inert integration test. It does not validate takeoff,
-movement, Land, RTL, hardware, or operator-in-the-loop recovery.
+The startup-health command is the ordinary inert integration test. The battery
+command is disarmed but explicitly operator-gated. Neither validates takeoff,
+movement, Land, RTL, hardware, or in-flight failure recovery.

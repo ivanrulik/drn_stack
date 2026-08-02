@@ -28,6 +28,7 @@ DEFAULT_MAX_PACK_BYTES = 1024 * 1024 * 1024
 DEFAULT_RETENTION_COUNT = 5
 CORE_TOPICS = (
     "/clock",
+    "/fmu/out/battery_status_v1",
     "/fmu/out/vehicle_command_ack",
     "/fmu/out/vehicle_local_position",
     "/fmu/out/vehicle_odometry",

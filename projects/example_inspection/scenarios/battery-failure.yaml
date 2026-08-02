@@ -1,0 +1,17 @@
+schema_version: 2
+name: battery-failure
+timeout_seconds: 480
+setup:
+  - type: core-smoke
+actions:
+  - type: inject-failure
+    component: battery
+    failure_type: "off"
+assertions:
+  - type: project-health
+  - type: topic-message
+    name: /drn/example_inspection/heartbeat
+cleanup:
+  - type: restore-failure
+    component: battery
+  - type: stop-stack
