@@ -19,6 +19,19 @@ Or with Bash:
 bash ./scripts/run-scenario.sh projects/example_inspection startup-health
 ```
 
+To preserve a reproducible evidence pack for the run:
+
+```powershell
+.\scripts\run-scenario.ps1 projects\example_inspection startup-health -Evidence
+```
+
+```bash
+bash ./scripts/run-scenario.sh projects/example_inspection startup-health --evidence
+```
+
+Evidence capture does not expand the scenario action schema or change its
+inert safety boundary. See [`docs/EVIDENCE_PACKS.md`](EVIDENCE_PACKS.md).
+
 The runner:
 
 1. Checks Docker, host storage, ports, and whether another `drn-stack` project
@@ -29,6 +42,10 @@ The runner:
 5. Starts the stack with the base and project Compose files merged.
 6. Runs the existing full smoke test and project assertions.
 7. Prints bounded logs on failure and always stops its containers.
+
+When evidence is enabled, the runner also starts a topic-allowlisted MCAP
+recording before the assertions, captures PX4's boot ULog, and finalizes a
+checksummed verdict after the containers stop.
 
 Images and Docker build cache are preserved. The runner never deletes global
 Docker data.

@@ -23,13 +23,19 @@ shellcheck --external-sources "${shell_files[@]}"
 mapfile -t yaml_files < <(find .github -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 mapfile -t project_yaml_files < <(find projects -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 yaml_files+=("${project_yaml_files[@]}")
-yaml_files+=(compose.yaml .yamllint.yml)
+yaml_files+=(compose.yaml compose.evidence.yaml .yamllint.yml)
 yamllint --strict "${yaml_files[@]}"
 
 docker compose --project-name drn-stack --file compose.yaml config --quiet
+DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
+  --project-name drn-stack \
+  --file compose.yaml \
+  --file compose.evidence.yaml \
+  config --quiet
 
 python3 -m compileall -q \
   src/drn_viz/launch \
+  scripts/docker/evidence.py \
   scripts/docker/project-sdk.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
 python3 -m unittest discover -s tests
@@ -63,6 +69,7 @@ required_files = (
     Path("docs/COMPATIBILITY.md"),
     Path("docs/RELEASE_POLICY.md"),
     Path("docs/PROJECT_SDK.md"),
+    Path("docs/EVIDENCE_PACKS.md"),
     Path("src/drn_viz/meshes/LICENSE"),
 )
 for path in required_files:

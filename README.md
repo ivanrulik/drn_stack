@@ -16,6 +16,8 @@ Project documentation:
   gates, and support window.
 - [`docs/PROJECT_SDK.md`](docs/PROJECT_SDK.md): downstream ROS 2 overlay and
   inert scenario contract.
+- [`docs/EVIDENCE_PACKS.md`](docs/EVIDENCE_PACKS.md): bounded MCAP/ULog
+  capture, integrity metadata, retention, and replay.
 
 Community and project policies:
 
@@ -67,6 +69,8 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
 | Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
+| Run the scenario with evidence | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health -Evidence` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health --evidence` |
+| Replay an evidence pack | `.\scripts\replay.ps1 artifacts\<run-id>` | `bash ./scripts/replay.sh artifacts/<run-id>` |
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
 
@@ -83,6 +87,13 @@ The runnable example lives under
 [`projects/example_inspection`](projects/example_inspection). See the
 [`project and scenario extension contract`](docs/PROJECT_SDK.md) before adding
 a downstream project.
+
+Add `-Evidence` in PowerShell or `--evidence` in Bash to create a portable,
+checksummed run directory containing compressed MCAP telemetry, PX4 ULog,
+scenario inputs, bounded logs, image identifiers, pinned revisions, and the
+final verdict. Capture remains inert and does not arm or command the vehicle.
+See [`docs/EVIDENCE_PACKS.md`](docs/EVIDENCE_PACKS.md) for replay and retention
+behavior.
 
 ## Docker storage safety
 

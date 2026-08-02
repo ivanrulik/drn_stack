@@ -1,0 +1,11 @@
+services:
+  ros-viz:
+    volumes:
+      - type: bind
+        source: ${DRN_ARTIFACT_DIR:?Set DRN_ARTIFACT_DIR to an absolute run directory}
+        target: /opt/drn_artifacts
+  px4-sitl:
+    volumes:
+      - type: bind
+        source: ${DRN_ARTIFACT_DIR:?Set DRN_ARTIFACT_DIR to an absolute run directory}/ulog
+        target: /opt/PX4-Autopilot/build/px4_sitl_default/rootfs/log

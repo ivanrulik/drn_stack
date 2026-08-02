@@ -35,5 +35,6 @@ dist/
 .DS_Store
 
 # Generated files
+artifacts/
 *.deb
 *.tar.gz
