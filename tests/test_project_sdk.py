@@ -52,6 +52,24 @@ def valid_scenario() -> dict:
     }
 
 
+def valid_operator_scenario() -> dict:
+    """Return the first allowlisted operator-gated scenario shape."""
+    scenario = valid_scenario()
+    scenario["schema_version"] = 2
+    scenario["actions"] = [
+        {
+            "type": "inject-failure",
+            "component": "battery",
+            "failure_type": "off",
+        }
+    ]
+    scenario["cleanup"] = [
+        {"type": "restore-failure", "component": "battery"},
+        {"type": "stop-stack"},
+    ]
+    return scenario
+
+
 class ContractFixture:
     """Create a temporary project using the real contract layout."""
 
@@ -134,6 +152,32 @@ class ProjectSdkTests(unittest.TestCase):
         scenario["actions"] = [{"type": "arm"}]
         fixture = self.make_fixture(scenario=scenario)
         with self.assertRaisesRegex(SDK.ConfigurationError, "actions must be an empty"):
+            SDK.validate_contract(fixture.manifest_path, fixture.scenario_path)
+
+    def test_operator_scenario_is_strict_and_requires_host_gate(self):
+        fixture = self.make_fixture(scenario=valid_operator_scenario())
+        manifest, scenario = SDK.validate_contract(
+            fixture.manifest_path, fixture.scenario_path
+        )
+        self.assertEqual(["battery off"], SDK.operator_action_lines(scenario))
+        self.assertEqual(["battery"], SDK.restoration_lines(scenario))
+        with self.assertRaisesRegex(SDK.ConfigurationError, "explicit gate"):
+            SDK.run_scenario(manifest, scenario)
+
+    def test_operator_scenario_rejects_unallowlisted_failure(self):
+        scenario = valid_operator_scenario()
+        scenario["actions"][0]["component"] = "gps"
+        fixture = self.make_fixture(scenario=scenario)
+        with self.assertRaisesRegex(
+            SDK.ConfigurationError, "only supports inject-failure battery off"
+        ):
+            SDK.validate_contract(fixture.manifest_path, fixture.scenario_path)
+
+    def test_operator_scenario_requires_matching_restoration(self):
+        scenario = valid_operator_scenario()
+        scenario["cleanup"] = [{"type": "stop-stack"}]
+        fixture = self.make_fixture(scenario=scenario)
+        with self.assertRaisesRegex(SDK.ConfigurationError, "restore battery"):
             SDK.validate_contract(fixture.manifest_path, fixture.scenario_path)
 
     def test_unknown_manifest_key_is_rejected(self):

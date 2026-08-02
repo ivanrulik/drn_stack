@@ -36,12 +36,16 @@ DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
 python3 -m compileall -q \
   src/drn_viz/launch \
   scripts/docker/evidence.py \
+  scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
 python3 -m unittest discover -s tests
 python3 scripts/docker/project-sdk.py validate \
   projects/example_inspection/project.yaml \
   projects/example_inspection/scenarios/startup-health.yaml
+python3 scripts/docker/project-sdk.py validate \
+  projects/example_inspection/project.yaml \
+  projects/example_inspection/scenarios/battery-failure.yaml
 python3 - <<'PY'
 import json
 from pathlib import Path

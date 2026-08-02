@@ -104,6 +104,10 @@ class EvidenceTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
+    def test_core_topics_include_versioned_battery_status(self):
+        self.assertIn("/fmu/out/battery_status_v1", EVIDENCE.CORE_TOPICS)
+        self.assertNotIn("/fmu/out/battery_status", EVIDENCE.CORE_TOPICS)
+
     def test_finalize_and_validate_complete_pack(self):
         fixture = EvidenceFixture(self.root)
         manifest = fixture.finalize()

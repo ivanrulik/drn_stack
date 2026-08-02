@@ -70,6 +70,7 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
 | Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
 | Run the scenario with evidence | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health -Evidence` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health --evidence` |
+| Run the disarmed battery-failure scenario | `.\scripts\run-scenario.ps1 projects\example_inspection battery-failure -AllowOperatorActions -Evidence` | `bash ./scripts/run-scenario.sh projects/example_inspection battery-failure --allow-operator-actions --evidence` |
 | Replay an evidence pack | `.\scripts\replay.ps1 artifacts\<run-id>` | `bash ./scripts/replay.sh artifacts/<run-id>` |
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
@@ -94,6 +95,12 @@ scenario inputs, bounded logs, image identifiers, pinned revisions, and the
 final verdict. Capture remains inert and does not arm or command the vehicle.
 See [`docs/EVIDENCE_PACKS.md`](docs/EVIDENCE_PACKS.md) for replay and retention
 behavior.
+
+Scenario schema version 2 adds one deliberately narrow operator action:
+disarmed PX4 SITL battery failure injection. It requires the explicit
+`-AllowOperatorActions` or `--allow-operator-actions` gate, verifies that PX4
+is disarmed, measures the simulated voltage change, and restores the battery
+before recording stops. It cannot arm, move, or target hardware.
 
 ## Docker storage safety
 

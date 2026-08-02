@@ -1,6 +1,6 @@
 # Open-source Ecosystem Roadmap
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-08-02
 
 ## Purpose
 
@@ -184,11 +184,13 @@ Status: complete.
 
 ### Phase 2: Evidence and regression workflow
 
-Status: in progress.
+Status: complete.
 
 - [x] Add MCAP and ULog collection, metadata manifests, replay, bounded
   retention, and CI artifact publishing.
-- [ ] Add failure-injection scenario primitives for operator-gated SITL tests.
+- [x] Add a disarmed, measurable battery-failure primitive with an explicit
+  operator gate and verified restoration. Additional in-flight failure modes
+  remain separate operator-in-the-loop work.
 
 ### Phase 3: Perception profiles
 

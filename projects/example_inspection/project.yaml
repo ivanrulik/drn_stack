@@ -16,3 +16,4 @@ health:
   services: []
 scenarios:
   - startup-health
+  - battery-failure

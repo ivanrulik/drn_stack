@@ -7,7 +7,9 @@ param(
     [ValidatePattern('^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$')]
     [string]$Scenario,
 
-    [switch]$Evidence
+    [switch]$Evidence,
+
+    [switch]$AllowOperatorActions
 )
 
 Set-StrictMode -Version Latest
@@ -50,9 +52,10 @@ function Invoke-DockerToFile {
 function Invoke-DockerTee {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
+        [switch]$Append,
         [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
     )
-    & docker @Arguments 2>&1 | Tee-Object -FilePath $Path
+    & docker @Arguments 2>&1 | Tee-Object -FilePath $Path -Append:$Append
     if ($LASTEXITCODE -ne 0) {
         throw "Docker command failed with exit code $LASTEXITCODE."
     }
@@ -173,6 +176,41 @@ exec /usr/local/bin/drn-evidence "$@"
     Invoke-Docker -Arguments $DockerArguments
 }
 
+function Invoke-ScenarioProject {
+    param([Parameter(Mandatory = $true)][string[]]$ProjectArguments)
+    $Command = @'
+source /usr/local/bin/drn-ros-environment
+set -u
+exec "$@"
+'@
+    $Command = $Command -replace "`r`n", "`n"
+    $DockerArguments = $ProjectCompose + @(
+        'exec', '-T', 'ros-viz', 'bash', '-lc', $Command, 'bash',
+        '/usr/local/bin/drn-project'
+    ) + $ProjectArguments
+    Invoke-DockerLogged -Arguments $DockerArguments
+}
+
+function Invoke-Px4Failure {
+    param([Parameter(Mandatory = $true)][string[]]$FailureArguments)
+    $DockerArguments = $ProjectCompose + @(
+        'exec', '-T', '-e', 'DRN_OPERATOR_ACTIONS=1', 'px4-sitl',
+        '/usr/local/bin/drn-px4-failure'
+    ) + $FailureArguments
+    Invoke-DockerLogged -Arguments $DockerArguments
+}
+
+function Invoke-DockerLogged {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+    if ($EvidenceInitialized) {
+        Invoke-DockerTee -Path (Join-Path $RunDir 'logs/scenario.log') `
+            -Append -Arguments $Arguments
+    }
+    else {
+        Invoke-Docker -Arguments $Arguments
+    }
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ProjectRoot = (Resolve-Path -LiteralPath $Project).Path
 if (-not (Test-Path -LiteralPath $ProjectRoot -PathType Container)) {
@@ -224,6 +262,7 @@ $PreviousArtifactDir = [Environment]::GetEnvironmentVariable('DRN_ARTIFACT_DIR')
 $StackOwned = $false
 $Succeeded = $false
 $RecordingStarted = $false
+$FailureActionsStarted = $false
 $EvidenceInitialized = $false
 $WorkflowError = $null
 $EvidenceRoot = $null
@@ -236,6 +275,10 @@ $ResolvedWorld = $null
 $RosImage = 'unavailable'
 $RosImageId = 'unavailable'
 $Px4ImageId = 'unavailable'
+$OperatorGate = 'inert'
+$ScenarioTimeout = 0
+$OperatorActions = @()
+$FailureRestorations = @()
 
 try {
     Assert-Docker
@@ -259,6 +302,36 @@ try {
     Invoke-Docker -Arguments (
         $Validator + @('validate', $ContainerManifest, $ContainerScenario)
     )
+    $OperatorGate = Invoke-DockerOutput -Arguments (
+        $Validator + @(
+            'inspect', $ContainerManifest, $ContainerScenario, 'operator-gate'
+        )
+    )
+    if ($OperatorGate -eq 'required') {
+        if (-not $AllowOperatorActions.IsPresent) {
+            throw "Scenario '$Scenario' contains operator actions. Re-run with " +
+                '-AllowOperatorActions after confirming disarmed SITL use.'
+        }
+        $ScenarioTimeoutText = Invoke-DockerOutput -Arguments (
+            $Validator + @(
+                'inspect', $ContainerManifest, $ContainerScenario, 'timeout-seconds'
+            )
+        )
+        if (-not [int]::TryParse($ScenarioTimeoutText, [ref]$ScenarioTimeout)) {
+            throw "Invalid validated scenario timeout: $ScenarioTimeoutText"
+        }
+        $ActionOutput = Invoke-DockerOutput -Arguments (
+            $Validator + @('actions', $ContainerManifest, $ContainerScenario)
+        )
+        $RestorationOutput = Invoke-DockerOutput -Arguments (
+            $Validator + @('restorations', $ContainerManifest, $ContainerScenario)
+        )
+        $OperatorActions = @($ActionOutput -split '\r?\n' | Where-Object { $_ })
+        $FailureRestorations = @(
+            $RestorationOutput -split '\r?\n' | Where-Object { $_ }
+        )
+        Write-Host "Operator gate accepted for disarmed SITL scenario '$Scenario'."
+    }
     $ProjectName = Invoke-DockerOutput -Arguments (
         $Validator + @('get', $ContainerManifest, 'name')
     )
@@ -324,22 +397,31 @@ try {
         Invoke-EvidenceExec start /opt/drn_artifacts $ContainerManifest
         $RecordingStarted = $true
     }
-    $ScenarioCommand = @'
-source /usr/local/bin/drn-ros-environment
-set -u
-exec "$@"
-'@
-    $ScenarioCommand = $ScenarioCommand -replace "`r`n", "`n"
-    $ScenarioArguments = $ProjectCompose + @(
-        'exec', '-T', 'ros-viz', 'bash', '-lc', $ScenarioCommand, 'bash',
-        '/usr/local/bin/drn-project', 'run', $ContainerManifest, $ContainerScenario
-    )
-    if ($EvidenceEnabled) {
-        Invoke-DockerTee -Path (Join-Path $RunDir 'logs/scenario.log') `
-            -Arguments $ScenarioArguments
+    if ($OperatorGate -eq 'required') {
+        $DeadlineUnix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + $ScenarioTimeout
+        Invoke-ScenarioProject -ProjectArguments @(
+            'run-phase', $ContainerManifest, $ContainerScenario, 'setup',
+            '--deadline-unix', $DeadlineUnix.ToString()
+        )
+        foreach ($ActionLine in $OperatorActions) {
+            $ActionParts = @($ActionLine -split ' ' | Where-Object { $_ })
+            if ($ActionParts.Count -ne 2) {
+                throw "Invalid validated action output: $ActionLine"
+            }
+            $FailureActionsStarted = $true
+            Invoke-Px4Failure -FailureArguments @(
+                'apply', $ActionParts[0], $ActionParts[1]
+            )
+        }
+        Invoke-ScenarioProject -ProjectArguments @(
+            'run-phase', $ContainerManifest, $ContainerScenario, 'assertions',
+            '--deadline-unix', $DeadlineUnix.ToString()
+        )
     }
     else {
-        Invoke-Docker -Arguments $ScenarioArguments
+        Invoke-ScenarioProject -ProjectArguments @(
+            'run', $ContainerManifest, $ContainerScenario
+        )
     }
     $Succeeded = $true
     Write-Host "Scenario '$Scenario' passed; stopping the isolated stack."
@@ -350,6 +432,23 @@ catch {
 finally {
     $CleanupMessages = [Collections.Generic.List[string]]::new()
     if ($StackOwned) {
+        if ($FailureActionsStarted) {
+            $RestorationFailed = $false
+            foreach ($Restoration in $FailureRestorations) {
+                try {
+                    Invoke-Px4Failure -FailureArguments @('restore', $Restoration)
+                }
+                catch {
+                    $RestorationFailed = $true
+                    $CleanupMessages.Add(
+                        "PX4 failure restoration failed: $($_.Exception.Message)"
+                    )
+                }
+            }
+            if (-not $RestorationFailed) {
+                $FailureActionsStarted = $false
+            }
+        }
         if ($RecordingStarted) {
             try {
                 Invoke-EvidenceExec stop /opt/drn_artifacts

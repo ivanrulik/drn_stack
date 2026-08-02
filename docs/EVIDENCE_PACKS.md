@@ -122,5 +122,6 @@ bash ./scripts/replay.sh artifacts/<run-id> drn-stack/example-inspection:humble
 ```
 
 ULog remains the authoritative PX4-native record and can be inspected with
-PX4-compatible analysis tools. This first slice does not run PX4 system-wide
-ULog replay or failure injection.
+PX4-compatible analysis tools. Evidence capture can surround an explicitly
+operator-gated scenario, but capture itself never adds actions. Replay never
+starts PX4 or reapplies a recorded failure.
