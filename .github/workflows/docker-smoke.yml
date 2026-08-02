@@ -44,5 +44,16 @@ jobs:
 
       - name: Run inert downstream-project scenario
         env:
+          DRN_EVIDENCE: "1"
+          DRN_EVIDENCE_ROOT: ${{ github.workspace }}/artifacts
           DRN_MIN_HOST_FREE_GB: "0"
         run: bash scripts/run-scenario.sh projects/example_inspection startup-health
+
+      - name: Upload scenario evidence pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-evidence-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7

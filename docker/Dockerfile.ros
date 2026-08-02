@@ -67,18 +67,24 @@ RUN apt-get update \
         ros-humble-eigen3-cmake-module \
         ros-humble-foxglove-bridge \
         ros-humble-joint-state-publisher \
+        ros-humble-rosbag2-storage-mcap \
         ros-humble-robot-state-publisher \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/ /usr/local/
 COPY --from=builder /opt/drn_ws/install/ /opt/drn_ws/install/
 COPY scripts/docker/project-sdk.py /usr/local/bin/drn-project
+COPY scripts/docker/evidence.py /usr/local/bin/drn-evidence
 COPY scripts/docker/ros-environment.sh /usr/local/bin/drn-ros-environment
 COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
 COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
 COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
 
-RUN chmod 0755 \
+RUN sed -i 's/\r$//' \
+        /usr/local/bin/drn-evidence \
+        /usr/local/bin/drn-project \
+    && chmod 0755 \
+        /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
         /usr/local/bin/drn-ros-environment \
         /usr/local/bin/drn-ros-entrypoint \

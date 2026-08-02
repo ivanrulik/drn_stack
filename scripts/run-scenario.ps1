@@ -5,7 +5,9 @@ param(
 
     [Parameter(Mandatory = $true, Position = 1)]
     [ValidatePattern('^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$')]
-    [string]$Scenario
+    [string]$Scenario,
+
+    [switch]$Evidence
 )
 
 Set-StrictMode -Version Latest
@@ -26,6 +28,34 @@ function Invoke-DockerOutput {
         throw "Docker command failed with exit code $LASTEXITCODE."
     }
     return ($Output -join "`n").Trim()
+}
+
+function Invoke-DockerToFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
+    )
+    $Output = @(& docker @Arguments 2>&1)
+    $ExitCode = $LASTEXITCODE
+    [IO.File]::WriteAllLines(
+        $Path,
+        [string[]]$Output,
+        [Text.UTF8Encoding]::new($false)
+    )
+    if ($ExitCode -ne 0) {
+        throw "Docker command failed with exit code $ExitCode."
+    }
+}
+
+function Invoke-DockerTee {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
+    )
+    & docker @Arguments 2>&1 | Tee-Object -FilePath $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker command failed with exit code $LASTEXITCODE."
+    }
 }
 
 function Get-Setting {
@@ -109,6 +139,40 @@ function Restore-EnvironmentValue {
     }
 }
 
+function Invoke-EvidenceExec {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    $Command = @'
+source /usr/local/bin/drn-ros-environment
+set -u
+exec /usr/local/bin/drn-evidence "$@"
+'@
+    $Command = $Command -replace "`r`n", "`n"
+    $DockerArguments = $ProjectCompose + @(
+        'exec', '-T', 'ros-viz', 'bash', '-lc', $Command, 'bash'
+    ) + $Arguments
+    Invoke-Docker -Arguments $DockerArguments
+}
+
+function Invoke-EvidenceRun {
+    param(
+        [Parameter(Mandatory = $true)][string]$MountSource,
+        [Parameter(Mandatory = $true)][string]$MountTarget,
+        [Parameter(Mandatory = $true)][string[]]$EvidenceArguments
+    )
+    $Command = @'
+source /usr/local/bin/drn-ros-environment
+set -u
+exec /usr/local/bin/drn-evidence "$@"
+'@
+    $Command = $Command -replace "`r`n", "`n"
+    $Mount = "type=bind,src=$MountSource,dst=$MountTarget"
+    $DockerArguments = @(
+        'run', '--rm', '--mount', $Mount, '--entrypoint', 'bash', $BaseImage,
+        '-lc', $Command, 'bash'
+    ) + $EvidenceArguments
+    Invoke-Docker -Arguments $DockerArguments
+}
+
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ProjectRoot = (Resolve-Path -LiteralPath $Project).Path
 if (-not (Test-Path -LiteralPath $ProjectRoot -PathType Container)) {
@@ -134,74 +198,268 @@ $ProjectMount = "type=bind,src=$ProjectRoot,dst=/opt/drn_project,readonly"
 $ContainerManifest = '/opt/drn_project/project.yaml'
 $ContainerScenario = "/opt/drn_project/scenarios/$Scenario.yaml"
 $BaseImage = 'drn-stack/ros-viz:humble'
+$Px4Image = 'drn-stack/px4-sitl:v1.17.0'
+
+$EvidenceSetting = Get-Setting -Name 'DRN_EVIDENCE' -Default '0'
+if ($EvidenceSetting -notin @('0', '1')) {
+    throw "DRN_EVIDENCE must be 0 or 1; got '$EvidenceSetting'."
+}
+$EvidenceEnabled = $Evidence.IsPresent -or $EvidenceSetting -eq '1'
+$EvidenceMaxText = Get-Setting -Name 'DRN_EVIDENCE_MAX_BYTES' -Default '1073741824'
+$EvidenceMaxBytes = 0L
+if (-not [long]::TryParse($EvidenceMaxText, [ref]$EvidenceMaxBytes) -or $EvidenceMaxBytes -le 0) {
+    throw 'DRN_EVIDENCE_MAX_BYTES must be a positive integer.'
+}
+$RetentionText = Get-Setting -Name 'DRN_EVIDENCE_RETENTION_COUNT' -Default '5'
+$RetentionCount = 0
+if (-not [int]::TryParse($RetentionText, [ref]$RetentionCount) -or
+    $RetentionCount -lt 1 -or $RetentionCount -gt 100) {
+    throw 'DRN_EVIDENCE_RETENTION_COUNT must be an integer from 1 to 100.'
+}
 
 $PreviousProjectDir = [Environment]::GetEnvironmentVariable('DRN_PROJECT_DIR')
 $PreviousModel = [Environment]::GetEnvironmentVariable('PX4_SIM_MODEL')
 $PreviousWorld = [Environment]::GetEnvironmentVariable('PX4_GZ_WORLD')
+$PreviousArtifactDir = [Environment]::GetEnvironmentVariable('DRN_ARTIFACT_DIR')
 $StackOwned = $false
 $Succeeded = $false
+$RecordingStarted = $false
+$EvidenceInitialized = $false
+$WorkflowError = $null
+$EvidenceRoot = $null
+$RunDir = $null
+$RunId = $null
+$StartedAt = $null
+$ProjectName = $null
+$ResolvedModel = $null
+$ResolvedWorld = $null
+$RosImage = 'unavailable'
+$RosImageId = 'unavailable'
+$Px4ImageId = 'unavailable'
 
 try {
     Assert-Docker
     Assert-StorageAvailable
     Assert-PortsAvailable
 
-    $ExistingContainers = Invoke-DockerOutput @BaseCompose ps --all --quiet
+    $ExistingContainers = Invoke-DockerOutput -Arguments (
+        $BaseCompose + @('ps', '--all', '--quiet')
+    )
     if (-not [string]::IsNullOrWhiteSpace($ExistingContainers)) {
         throw 'The drn-stack Compose project is already running. Stop it before running an isolated scenario.'
     }
 
     Write-Host 'Building the pinned DRN base image...'
-    Invoke-Docker @BaseCompose build ros-viz
+    Invoke-Docker -Arguments ($BaseCompose + @('build', 'ros-viz'))
 
     $Validator = @(
         'run', '--rm', '--mount', $ProjectMount,
         '--entrypoint', '/usr/local/bin/drn-project', $BaseImage
     )
-    Invoke-Docker @Validator validate $ContainerManifest $ContainerScenario
-    $ResolvedModel = Invoke-DockerOutput @Validator get $ContainerManifest vehicle
-    $ResolvedWorld = Invoke-DockerOutput @Validator get $ContainerManifest world
+    Invoke-Docker -Arguments (
+        $Validator + @('validate', $ContainerManifest, $ContainerScenario)
+    )
+    $ProjectName = Invoke-DockerOutput -Arguments (
+        $Validator + @('get', $ContainerManifest, 'name')
+    )
+    $ResolvedModel = Invoke-DockerOutput -Arguments (
+        $Validator + @('get', $ContainerManifest, 'vehicle')
+    )
+    $ResolvedWorld = Invoke-DockerOutput -Arguments (
+        $Validator + @('get', $ContainerManifest, 'world')
+    )
 
     $env:DRN_PROJECT_DIR = $ProjectRoot
     $env:PX4_SIM_MODEL = $ResolvedModel
     $env:PX4_GZ_WORLD = $ResolvedWorld
 
-    Invoke-Docker @ProjectCompose config --quiet
+    if ($EvidenceEnabled) {
+        $EvidenceRootInput = Get-Setting -Name 'DRN_EVIDENCE_ROOT' `
+            -Default (Join-Path $RepoRoot 'artifacts')
+        [void](New-Item -ItemType Directory -Force -Path $EvidenceRootInput)
+        $EvidenceRoot = (Resolve-Path -LiteralPath $EvidenceRootInput).Path
+        $Timestamp = [DateTime]::UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'")
+        $ShortRevision = (& git -C $RepoRoot rev-parse --short=8 HEAD).Trim()
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not resolve the DRN Git revision.'
+        }
+        $RunId = "$Timestamp-$Scenario-$ShortRevision"
+        $RunDir = Join-Path $EvidenceRoot $RunId
+        if (Test-Path -LiteralPath $RunDir) {
+            throw "Evidence run directory already exists: $RunDir"
+        }
+        foreach ($Directory in @('logs', 'metadata', 'ulog')) {
+            [void](New-Item -ItemType Directory -Path (Join-Path $RunDir $Directory))
+        }
+        Copy-Item -LiteralPath $ManifestPath -Destination (Join-Path $RunDir 'metadata/project.yaml')
+        Copy-Item -LiteralPath $ScenarioPath -Destination (Join-Path $RunDir 'metadata/scenario.yaml')
+        Copy-Item -LiteralPath (Join-Path $RepoRoot 'compose.yaml') `
+            -Destination (Join-Path $RunDir 'metadata/compose.yaml')
+        $env:DRN_ARTIFACT_DIR = $RunDir
+        $ProjectCompose += @('--file', (Join-Path $RepoRoot 'compose.evidence.yaml'))
+        $StartedAt = [DateTime]::UtcNow.ToString('o')
+        $EvidenceInitialized = $true
+    }
+
+    Invoke-Docker -Arguments ($ProjectCompose + @('config', '--quiet'))
     Write-Host "Building project overlay for $ProjectRoot..."
-    Invoke-Docker @BaseCompose build px4-sitl
-    Invoke-Docker @ProjectCompose build ros-viz
+    Invoke-Docker -Arguments ($BaseCompose + @('build', 'px4-sitl'))
+    Invoke-Docker -Arguments ($ProjectCompose + @('build', 'ros-viz'))
+    $RosImage = "drn-stack/$ProjectName`:humble"
+    $RosImageId = Invoke-DockerOutput -Arguments @(
+        'image', 'inspect', '--format', '{{.Id}}', $RosImage
+    )
+    $Px4ImageId = Invoke-DockerOutput -Arguments @(
+        'image', 'inspect', '--format', '{{.Id}}', $Px4Image
+    )
 
     $StackOwned = $true
-    Invoke-Docker @ProjectCompose up -d --no-build --remove-orphans --wait --wait-timeout 300
+    Invoke-Docker -Arguments (
+        $ProjectCompose + @(
+            'up', '-d', '--no-build', '--remove-orphans', '--wait',
+            '--wait-timeout', '300'
+        )
+    )
+    if ($EvidenceEnabled) {
+        Invoke-EvidenceExec start /opt/drn_artifacts $ContainerManifest
+        $RecordingStarted = $true
+    }
     $ScenarioCommand = @'
 source /usr/local/bin/drn-ros-environment
 set -u
 exec "$@"
 '@
     $ScenarioCommand = $ScenarioCommand -replace "`r`n", "`n"
-    Invoke-Docker @ProjectCompose exec -T ros-viz bash -lc $ScenarioCommand bash `
-        /usr/local/bin/drn-project run $ContainerManifest $ContainerScenario
+    $ScenarioArguments = $ProjectCompose + @(
+        'exec', '-T', 'ros-viz', 'bash', '-lc', $ScenarioCommand, 'bash',
+        '/usr/local/bin/drn-project', 'run', $ContainerManifest, $ContainerScenario
+    )
+    if ($EvidenceEnabled) {
+        Invoke-DockerTee -Path (Join-Path $RunDir 'logs/scenario.log') `
+            -Arguments $ScenarioArguments
+    }
+    else {
+        Invoke-Docker -Arguments $ScenarioArguments
+    }
     $Succeeded = $true
     Write-Host "Scenario '$Scenario' passed; stopping the isolated stack."
 }
+catch {
+    $WorkflowError = $_
+}
 finally {
-    $CleanupError = $null
+    $CleanupMessages = [Collections.Generic.List[string]]::new()
     if ($StackOwned) {
+        if ($RecordingStarted) {
+            try {
+                Invoke-EvidenceExec stop /opt/drn_artifacts
+            }
+            catch {
+                $CleanupMessages.Add("Evidence recorder failed: $($_.Exception.Message)")
+            }
+        }
+        if ($EvidenceInitialized) {
+            try {
+                $LogArguments = $ProjectCompose + @(
+                    'logs', '--no-color', '--tail=500'
+                )
+                Invoke-DockerToFile -Path (Join-Path $RunDir 'logs/compose.log') `
+                    -Arguments $LogArguments
+            }
+            catch {
+                $CleanupMessages.Add("Compose log capture failed: $($_.Exception.Message)")
+            }
+        }
         if (-not $Succeeded) {
             Write-Host "`nScenario failed. Recent project logs:"
-            try { Invoke-Docker @ProjectCompose logs --no-color --tail=200 } catch {}
+            try {
+                Invoke-Docker -Arguments (
+                    $ProjectCompose + @('logs', '--no-color', '--tail=200')
+                )
+            }
+            catch {}
         }
         try {
-            Invoke-Docker @ProjectCompose down --remove-orphans --timeout 30
+            Invoke-Docker -Arguments (
+                $ProjectCompose + @('down', '--remove-orphans', '--timeout', '30')
+            )
         }
         catch {
-            $CleanupError = $_
+            $CleanupMessages.Add("Stack cleanup failed: $($_.Exception.Message)")
         }
     }
+
+    if ($EvidenceInitialized) {
+        $Verdict = if ($Succeeded -and $null -eq $WorkflowError -and
+            $CleanupMessages.Count -eq 0) { 'passed' } else { 'failed' }
+        $FinishedAt = [DateTime]::UtcNow.ToString('o')
+        $GitRevision = (& git -C $RepoRoot rev-parse HEAD).Trim()
+        $FinalizeArguments = @(
+            'finalize', '/evidence',
+            '--run-id', $RunId,
+            '--project', $ProjectName,
+            '--scenario', $Scenario,
+            '--verdict', $Verdict,
+            '--started-at', $StartedAt,
+            '--finished-at', $FinishedAt,
+            '--git-revision', $GitRevision,
+            '--ros-image', $RosImage,
+            '--ros-image-id', $RosImageId,
+            '--px4-image', $Px4Image,
+            '--px4-image-id', $Px4ImageId,
+            '--vehicle', $ResolvedModel,
+            '--world', $ResolvedWorld,
+            '--ros-domain-id', (Get-Setting -Name 'ROS_DOMAIN_ID' -Default '0'),
+            '--max-pack-bytes', $EvidenceMaxBytes.ToString()
+        )
+        if ($Verdict -eq 'failed') {
+            $Reason = if ($null -ne $WorkflowError) {
+                $WorkflowError.Exception.Message
+            }
+            elseif ($CleanupMessages.Count -gt 0) {
+                $CleanupMessages -join '; '
+            }
+            else {
+                'scenario workflow failed'
+            }
+            $FinalizeArguments += @('--error', $Reason)
+        }
+        try {
+            Invoke-EvidenceRun -MountSource $RunDir -MountTarget '/evidence' `
+                -EvidenceArguments $FinalizeArguments
+        }
+        catch {
+            $CleanupMessages.Add("Evidence finalization failed: $($_.Exception.Message)")
+        }
+        if (Test-Path -LiteralPath (Join-Path $RunDir 'manifest.json')) {
+            try {
+                Invoke-EvidenceRun -MountSource $RunDir -MountTarget '/evidence' `
+                    -EvidenceArguments @('validate', '/evidence')
+            }
+            catch {
+                $CleanupMessages.Add("Evidence validation failed: $($_.Exception.Message)")
+            }
+        }
+        try {
+            Invoke-EvidenceRun -MountSource $EvidenceRoot -MountTarget '/artifacts' `
+                -EvidenceArguments @('prune', '/artifacts', '--keep', $RetentionCount.ToString())
+        }
+        catch {
+            $CleanupMessages.Add("Evidence retention failed: $($_.Exception.Message)")
+        }
+        Write-Host "Evidence pack: $RunDir"
+    }
+
     Restore-EnvironmentValue -Name 'DRN_PROJECT_DIR' -Value $PreviousProjectDir
     Restore-EnvironmentValue -Name 'PX4_SIM_MODEL' -Value $PreviousModel
     Restore-EnvironmentValue -Name 'PX4_GZ_WORLD' -Value $PreviousWorld
-    if ($null -ne $CleanupError) {
-        throw $CleanupError
+    Restore-EnvironmentValue -Name 'DRN_ARTIFACT_DIR' -Value $PreviousArtifactDir
+
+    if ($CleanupMessages.Count -gt 0 -and $null -eq $WorkflowError) {
+        $WorkflowError = [InvalidOperationException]::new($CleanupMessages -join '; ')
     }
+}
+
+if ($null -ne $WorkflowError) {
+    throw $WorkflowError
 }

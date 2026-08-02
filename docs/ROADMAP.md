@@ -85,11 +85,10 @@ issue or pull request.
 - Scenario definition, timestamps, assertions, and final verdict.
 - Bounded container logs and a concise machine-readable summary.
 
-Potential interface:
+Delivered first-slice interface:
 
 ```powershell
-.\scripts\record.ps1
-.\scripts\stop-recording.ps1
+.\scripts\run-scenario.ps1 projects\example_inspection startup-health -Evidence
 .\scripts\replay.ps1 artifacts\<run-id>
 ```
 
@@ -185,9 +184,11 @@ Status: complete.
 
 ### Phase 2: Evidence and regression workflow
 
-- Add MCAP and ULog collection, metadata manifests, replay, bounded retention,
-  and CI artifact publishing.
-- Add failure-injection scenario primitives for operator-gated SITL tests.
+Status: in progress.
+
+- [x] Add MCAP and ULog collection, metadata manifests, replay, bounded
+  retention, and CI artifact publishing.
+- [ ] Add failure-injection scenario primitives for operator-gated SITL tests.
 
 ### Phase 3: Perception profiles
 
