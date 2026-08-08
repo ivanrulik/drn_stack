@@ -1,0 +1,13 @@
+services:
+  ros-viz:
+    environment:
+      DRN_GPU_ACCELERATION: software
+
+  px4-sitl:
+    environment:
+      DRN_GPU_ACCELERATION: software
+    volumes:
+      - type: bind
+        source: ./profiles/x500-depth/models/OakD-Lite/model.sdf
+        target: /opt/PX4-Autopilot/Tools/simulation/gz/models/OakD-Lite/model.sdf
+        read_only: true

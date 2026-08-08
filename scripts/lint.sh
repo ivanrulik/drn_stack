@@ -23,10 +23,31 @@ shellcheck --external-sources "${shell_files[@]}"
 mapfile -t yaml_files < <(find .github -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 mapfile -t project_yaml_files < <(find projects -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 yaml_files+=("${project_yaml_files[@]}")
+mapfile -t profile_yaml_files < <(find profiles -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
+yaml_files+=("${profile_yaml_files[@]}")
 yaml_files+=(compose.yaml compose.evidence.yaml .yamllint.yml)
 yamllint --strict "${yaml_files[@]}"
 
 docker compose --project-name drn-stack --file compose.yaml config --quiet
+for profile in x500-basic x500-depth; do
+  docker compose \
+    --project-name drn-stack \
+    --file compose.yaml \
+    --file "profiles/${profile}/compose.yaml" \
+    config --quiet
+done
+docker compose \
+  --project-name drn-stack \
+  --file compose.yaml \
+  --file profiles/x500-depth/compose.yaml \
+  --file profiles/x500-depth/compose.gpu.yaml \
+  config --quiet
+docker compose \
+  --project-name drn-stack \
+  --file compose.yaml \
+  --file profiles/x500-depth/compose.yaml \
+  --file profiles/x500-depth/compose.software.yaml \
+  config --quiet
 DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
   --project-name drn-stack \
   --file compose.yaml \
@@ -38,6 +59,7 @@ python3 -m compileall -q \
   scripts/docker/evidence.py \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
+  scripts/docker/sensor-smoke.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
 python3 -m unittest discover -s tests
 python3 scripts/docker/project-sdk.py validate \
@@ -121,6 +143,7 @@ expected_refs = {
     "PX4_ROS_COM_REF": "86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af",
     "PX4_ROS2_INTERFACE_REF": "4a3370f084ac6f1ef001a4afa2b007845ffd0837",
     "MICRO_XRCE_DDS_AGENT_REF": "73622810d984349b80bbac0ef55fc0b694d62222",
+    "ROS_GZ_HARMONIC_VERSION": "0.244.12-3jammy",
 }
 compose = Path("compose.yaml").read_text(encoding="utf-8")
 compatibility = Path("docs/COMPATIBILITY.md").read_text(encoding="utf-8")
@@ -159,6 +182,24 @@ for path in Path("foxglove").glob("*.json"):
                 raise ValueError(
                     f"{path}: {panel_id} must publish at 20 Hz and stop on release"
                 )
+
+    if path.name == "drn-simulation-x500-depth.json":
+        expected_images = {
+            "Image!color": (
+                "/drn/sensors/front/color/image_raw",
+                "/drn/sensors/front/color/camera_info",
+            ),
+            "Image!depth": (
+                "/drn/sensors/front/depth/image_raw",
+                "/drn/sensors/front/depth/camera_info",
+            ),
+        }
+        for panel_id, (topic, calibration) in expected_images.items():
+            panel = panel_configs[panel_id]
+            if panel["imageMode"]["imageTopic"] != topic:
+                raise ValueError(f"{path}: {panel_id} must render {topic}")
+            if panel["imageMode"]["calibrationTopic"] != calibration:
+                raise ValueError(f"{path}: {panel_id} must use {calibration}")
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

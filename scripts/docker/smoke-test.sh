@@ -32,6 +32,13 @@ quick_smoke() {
   grep -Fx /drn/control/hold <<<"${services}" >/dev/null
   grep -Fx /drn/control/land <<<"${services}" >/dev/null
   grep -Fx /drn/control/rtl <<<"${services}" >/dev/null
+  if [[ "${DRN_PROFILE:-x500-basic}" == "x500-depth" ]]; then
+    grep -Fx /x500_depth_bridge <<<"${nodes}" >/dev/null
+    grep -Fx /drn/sensors/front/color/image_raw <<<"${topics}" >/dev/null
+    grep -Fx /drn/sensors/front/depth/image_raw <<<"${topics}" >/dev/null
+    grep -Fx /drn/sensors/front/color/camera_info <<<"${topics}" >/dev/null
+    grep -Fx /drn/sensors/front/depth/camera_info <<<"${topics}" >/dev/null
+  fi
   foxglove_listening
 }
 
@@ -65,6 +72,14 @@ full_smoke() {
     timeout 15 ros2 run tf2_ros tf2_echo map base_link 2>&1 |
       grep -m1 -q "Translation"
   )
+  if [[ "${DRN_PROFILE:-x500-basic}" == "x500-depth" ]]; then
+    timeout 100 /usr/local/bin/drn-sensor-smoke
+    (
+      set +o pipefail
+      timeout 15 ros2 run tf2_ros tf2_echo base_link camera_link 2>&1 |
+        grep -m1 -q "Translation"
+    )
+  fi
   foxglove_listening
 }
 

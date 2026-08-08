@@ -42,8 +42,16 @@ RUN sed -i \
 # Compile SITL during the image build so startup only launches the simulator.
 RUN make -j"${BUILD_JOBS}" px4_sitl_default
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends mesa-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY scripts/docker/px4-entrypoint.sh /usr/local/bin/drn-px4-entrypoint
 COPY scripts/docker/px4-failure.py /usr/local/bin/drn-px4-failure
-RUN chmod 0755 /usr/local/bin/drn-px4-entrypoint /usr/local/bin/drn-px4-failure
+COPY scripts/docker/gpu-renderer-check.sh /usr/local/bin/drn-gpu-renderer-check
+RUN chmod 0755 \
+        /usr/local/bin/drn-px4-entrypoint \
+        /usr/local/bin/drn-px4-failure \
+        /usr/local/bin/drn-gpu-renderer-check
 
 ENTRYPOINT ["/usr/local/bin/drn-px4-entrypoint"]

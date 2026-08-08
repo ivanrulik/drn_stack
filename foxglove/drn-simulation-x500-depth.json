@@ -1,0 +1,149 @@
+{
+  "configById": {
+    "3D!depthSim": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 8,
+        "phi": 45,
+        "thetaOffset": 135,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "ignoreColladaUpAxis": true
+      },
+      "transforms": {
+        "frame:map": {"visible": true},
+        "frame:base_link": {"visible": true},
+        "frame:camera_link": {"visible": true}
+      },
+      "topics": {
+        "/robot_description": {"visible": true}
+      },
+      "layers": {
+        "depth-map-grid": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Map grid",
+          "instanceId": "depth-map-grid",
+          "layerId": "foxglove.Grid",
+          "frameId": "map",
+          "size": 20,
+          "divisions": 20,
+          "lineWidth": 1,
+          "color": "#6b7280",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/drn/control/setpoint",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "foxglovePanelTitle": "x500 Depth Simulation"
+    },
+    "Image!color": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/drn/control/setpoint",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/drn/sensors/front/color/image_raw",
+        "calibrationTopic": "/drn/sensors/front/color/camera_info"
+      },
+      "foxglovePanelTitle": "Front Color"
+    },
+    "Image!depth": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/drn/control/setpoint",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/drn/sensors/front/depth/image_raw",
+        "calibrationTopic": "/drn/sensors/front/depth/camera_info",
+        "colorMode": "colormap",
+        "colorMap": "turbo",
+        "minValue": 0.2,
+        "maxValue": 10
+      },
+      "foxglovePanelTitle": "Front Depth (m)"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime",
+    "timeDisplayMethod": "ROS"
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!depthSim",
+    "second": {
+      "direction": "column",
+      "first": "Image!color",
+      "second": "Image!depth",
+      "splitPercentage": 50
+    },
+    "splitPercentage": 50
+  }
+}

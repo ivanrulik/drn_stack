@@ -1,0 +1,11 @@
+services:
+  ros-viz:
+    environment:
+      DRN_GPU_ACCELERATION: nvidia
+
+  px4-sitl:
+    gpus: all
+    environment:
+      DRN_GPU_ACCELERATION: nvidia
+      NVIDIA_DRIVER_CAPABILITIES: compute,graphics,utility
+      NVIDIA_VISIBLE_DEVICES: all

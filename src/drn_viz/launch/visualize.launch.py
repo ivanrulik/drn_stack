@@ -28,6 +28,11 @@ def _launch_setup(context, *args, **kwargs):
     world_frame = LaunchConfiguration('world_frame').perform(context)
     base_frame = LaunchConfiguration('base_frame').perform(context)
     foxglove_port = int(LaunchConfiguration('foxglove_port').perform(context))
+    profile = LaunchConfiguration('profile').perform(context)
+    world_name = LaunchConfiguration('world_name').perform(context)
+
+    if profile not in ('x500-basic', 'x500-depth'):
+        raise RuntimeError(f"Unsupported DRN profile: {profile}")
 
     with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
         robot_description = urdf_file.read()
@@ -99,6 +104,58 @@ def _launch_setup(context, *args, **kwargs):
                 LogInfo(msg='joint_state_publisher was requested but is not installed. Skipping.')
             )
 
+    if profile == 'x500-depth':
+        color_gz_topic = (
+            f'/world/{world_name}/model/x500_depth_0/link/camera_link/'
+            'sensor/IMX214/image'
+        )
+        color_info_gz_topic = (
+            f'/world/{world_name}/model/x500_depth_0/link/camera_link/'
+            'sensor/IMX214/camera_info'
+        )
+        depth_gz_topic = '/depth_camera'
+        depth_info_gz_topic = '/camera_info'
+        nodes.extend([
+            Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                name='x500_depth_bridge',
+                output='screen',
+                arguments=[
+                    f'{color_gz_topic}@sensor_msgs/msg/Image[gz.msgs.Image',
+                    (
+                        f'{color_info_gz_topic}@sensor_msgs/msg/CameraInfo'
+                        '[gz.msgs.CameraInfo'
+                    ),
+                    f'{depth_gz_topic}@sensor_msgs/msg/Image[gz.msgs.Image',
+                    (
+                        f'{depth_info_gz_topic}@sensor_msgs/msg/CameraInfo'
+                        '[gz.msgs.CameraInfo'
+                    ),
+                ],
+                remappings=[
+                    (color_gz_topic, '/drn/sensors/front/color/image_raw'),
+                    (color_info_gz_topic, '/drn/sensors/front/color/camera_info'),
+                    (depth_gz_topic, '/drn/sensors/front/depth/image_raw'),
+                    (depth_info_gz_topic, '/drn/sensors/front/depth/camera_info'),
+                ],
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='x500_depth_camera_tf',
+                output='screen',
+                arguments=[
+                    '--x', '0.13233', '--y', '0', '--z', '0.26078',
+                    '--roll', '-1.57079632679',
+                    '--pitch', '0',
+                    '--yaw', '-1.57079632679',
+                    '--frame-id', base_frame,
+                    '--child-frame-id', 'camera_link',
+                ],
+            ),
+        ])
+
     return nodes
 
 
@@ -137,6 +194,16 @@ def generate_launch_description():
             'foxglove_port',
             default_value='8765',
             description='TCP port for Foxglove Bridge.',
+        ),
+        DeclareLaunchArgument(
+            'profile',
+            default_value='x500-basic',
+            description='Simulation profile: x500-basic or x500-depth.',
+        ),
+        DeclareLaunchArgument(
+            'world_name',
+            default_value='default',
+            description='Gazebo world name used to resolve sensor topics.',
         ),
         OpaqueFunction(function=_launch_setup),
     ])

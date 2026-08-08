@@ -17,12 +17,15 @@ services:
         PX4_ROS_COM_REF: 86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af
         PX4_ROS2_INTERFACE_REF: 4a3370f084ac6f1ef001a4afa2b007845ffd0837
         MICRO_XRCE_DDS_AGENT_REF: 73622810d984349b80bbac0ef55fc0b694d62222
+        ROS_GZ_HARMONIC_VERSION: 0.244.12-3jammy
     init: true
     environment:
       ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
       XRCE_PORT: "8888"
       FOXGLOVE_PORT: "${FOXGLOVE_PORT:-8765}"
       ODOMETRY_TOPIC: "/fmu/out/vehicle_odometry"
+      DRN_PROFILE: "x500-basic"
+      PX4_GZ_WORLD: "${PX4_GZ_WORLD:-default}"
     ports:
       - "${FOXGLOVE_HOST:-127.0.0.1}:${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"
     healthcheck:
@@ -58,7 +61,12 @@ services:
       QGC_HOST: "${QGC_HOST:-host.docker.internal}"
       QGC_PORT: "${QGC_PORT:-14550}"
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -x px4 >/dev/null"]
+      test:
+        - CMD-SHELL
+        - >-
+          pgrep -x px4 >/dev/null &&
+          { [ "$${DRN_GPU_ACCELERATION:-software}" != nvidia ] ||
+          [ -e /dev/nvidia0 ] || [ -e /dev/dxg ]; }
       interval: 5s
       timeout: 5s
       retries: 36

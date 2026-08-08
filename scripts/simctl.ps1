@@ -8,6 +8,9 @@ param(
     [ValidateSet('px4-sitl', 'ros-viz')]
     [string]$Service,
 
+    [ValidateSet('x500-basic', 'x500-depth')]
+    [string]$Profile = 'x500-basic',
+
     [switch]$Force
 )
 
@@ -26,8 +29,10 @@ $ComposeArgs = @(
     'compose',
     '--project-name', 'drn-stack',
     '--project-directory', $RepoRoot,
-    '-f', (Join-Path $RepoRoot 'compose.yaml')
+    '-f', (Join-Path $RepoRoot 'compose.yaml'),
+    '-f', (Join-Path $RepoRoot "profiles\$Profile\compose.yaml")
 )
+$GpuAcceleration = 'software'
 
 function Invoke-Docker {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -152,6 +157,61 @@ function Assert-Docker {
     }
 }
 
+function Enable-DepthGpu {
+    if ($Profile -ne 'x500-depth') {
+        return
+    }
+
+    $Mode = (Get-Setting -Name 'DRN_GPU_MODE' -Default 'auto').ToLowerInvariant()
+    if ($Mode -notin @('auto', 'on', 'off')) {
+        throw "DRN_GPU_MODE must be auto, on, or off; got '$Mode'."
+    }
+    if ($Mode -eq 'off') {
+        $script:ComposeArgs += @(
+            '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.software.yaml')
+        )
+        Write-Host 'GPU acceleration: disabled; using balanced software sensor rates'
+        return
+    }
+
+    $PreviousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    try {
+        & docker run --rm --gpus all `
+            --env NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility `
+            --env NVIDIA_VISIBLE_DEVICES=all `
+            --entrypoint /usr/local/bin/drn-gpu-renderer-check `
+            drn-stack/px4-sitl:v1.17.0 *> $null
+        $GpuProbeExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $PreviousPreference
+    }
+
+    if ($GpuProbeExitCode -ne 0) {
+        if ($Mode -eq 'on') {
+            throw (
+                'DRN_GPU_MODE=on was requested, but Docker could not initialize ' +
+                'a hardware EGL renderer for Gazebo.'
+            )
+        }
+        $script:ComposeArgs += @(
+            '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.software.yaml')
+        )
+        Write-Host (
+            'GPU acceleration: no hardware EGL renderer; ' +
+            'using balanced software sensor rates'
+        )
+        return
+    }
+
+    $script:ComposeArgs += @(
+        '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.gpu.yaml')
+    )
+    $script:GpuAcceleration = 'hardware (EGL)'
+    Write-Host 'GPU acceleration: hardware EGL renderer enabled'
+}
+
 function Assert-PortsAvailable {
     $AllowedPrefix = 'drn-stack-'
     $Ports = @(
@@ -190,7 +250,14 @@ function Show-Summary {
     $QgcPort = Get-Setting -Name 'QGC_PORT' -Default '14550'
     Write-Host ''
     Write-Host 'DRN simulation is ready.'
+    Write-Host "Profile: $Profile"
+    if ($Profile -eq 'x500-depth') {
+        Write-Host "Rendering: $GpuAcceleration"
+    }
     Write-Host "Foxglove: ws://localhost:$FoxglovePort"
+    if ($Profile -eq 'x500-depth') {
+        Write-Host 'Foxglove layout: foxglove\drn-simulation-x500-depth.json'
+    }
     Write-Host "QGroundControl: UDP localhost:$QgcPort"
     Write-Host 'Logs: .\scripts\logs.ps1'
     Write-Host 'Status: .\scripts\status.ps1'
@@ -233,6 +300,8 @@ switch ($Action) {
         try {
             Invoke-Compose build ros-viz
             Invoke-Compose build px4-sitl
+            Enable-DepthGpu
+            Invoke-Compose config --quiet
             Invoke-Compose up -d --no-build --remove-orphans --wait --wait-timeout 300
             Invoke-FullSmoke
             Show-Summary
@@ -245,6 +314,8 @@ switch ($Action) {
     'restart' {
         Assert-StorageAvailable
         try {
+            Enable-DepthGpu
+            Invoke-Compose config --quiet
             Invoke-Compose stop --timeout 30
             Invoke-Compose up -d --no-build --remove-orphans --wait --wait-timeout 300
             Invoke-FullSmoke
@@ -259,7 +330,7 @@ switch ($Action) {
         Show-StorageStatus | Out-Null
         Invoke-Compose ps
         Invoke-QuickSmoke
-        Write-Host "`nFoxglove and PX4 odometry checks passed."
+        Write-Host "`n$Profile profile, Foxglove, and PX4 odometry checks passed."
     }
     'logs' {
         if ($Service) {

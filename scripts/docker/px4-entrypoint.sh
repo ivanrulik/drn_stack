@@ -48,4 +48,8 @@ fi
 
 export QGC_HOST_IP
 
+if [[ "${DRN_GPU_ACCELERATION:-software}" == "nvidia" ]]; then
+  /usr/local/bin/drn-gpu-renderer-check
+fi
+
 exec make px4_sitl "${PX4_SIM_MODEL}"

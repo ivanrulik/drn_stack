@@ -25,3 +25,11 @@ match that source.
 These assets are distributed under the BSD-3-Clause license, copyright
 Rudis Laboratories. A copy of that license is installed with the assets at
 `src/drn_viz/meshes/LICENSE`.
+
+## PX4 OakD-Lite sensor model
+
+`profiles/x500-depth/models/OakD-Lite/model.sdf` is derived from the OakD-Lite
+model in `PX4/PX4-Autopilot` at pinned commit
+`a5eb12d2ab591251faa009f76b2685b8cc64405d`. DRN changes only the color
+resolution and the color/depth update rates used by the software-rendering
+fallback. PX4-Autopilot is distributed under the BSD-3-Clause license.

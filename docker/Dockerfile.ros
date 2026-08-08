@@ -49,15 +49,20 @@ RUN . /opt/ros/humble/setup.sh \
     && rosdep update \
     && apt-get update \
     && rosdep install --from-paths src --ignore-src --rosdistro humble -r -y \
+        --skip-keys ros_gz_bridge \
     && colcon build --merge-install --parallel-workers 2 --cmake-args -DCMAKE_BUILD_TYPE=Release \
     && rm -rf /var/lib/apt/lists/*
 
 FROM ros:humble-ros-base-jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG ROS_GZ_HARMONIC_VERSION=0.244.12-3jammy
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg \
         libasio-dev \
         libeigen3-dev \
         libtinyxml2-9 \
@@ -69,6 +74,14 @@ RUN apt-get update \
         ros-humble-joint-state-publisher \
         ros-humble-rosbag2-storage-mcap \
         ros-humble-robot-state-publisher \
+    && curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
+        -o /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
+    && . /etc/os-release \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable ${UBUNTU_CODENAME} main" \
+        > /etc/apt/sources.list.d/gazebo-stable.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ros-humble-ros-gzharmonic-bridge="${ROS_GZ_HARMONIC_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/ /usr/local/
@@ -78,17 +91,20 @@ COPY scripts/docker/evidence.py /usr/local/bin/drn-evidence
 COPY scripts/docker/ros-environment.sh /usr/local/bin/drn-ros-environment
 COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
 COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
+COPY scripts/docker/sensor-smoke.py /usr/local/bin/drn-sensor-smoke
 COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
 
 RUN sed -i 's/\r$//' \
         /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
+        /usr/local/bin/drn-sensor-smoke \
     && chmod 0755 \
         /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
         /usr/local/bin/drn-ros-environment \
         /usr/local/bin/drn-ros-entrypoint \
         /usr/local/bin/drn-ros-healthcheck \
+        /usr/local/bin/drn-sensor-smoke \
         /usr/local/bin/drn-smoke-test \
     && ldconfig
 
@@ -97,5 +113,7 @@ ENV ROS_DOMAIN_ID=0
 ENV XRCE_PORT=8888
 ENV FOXGLOVE_PORT=8765
 ENV ODOMETRY_TOPIC=/fmu/out/vehicle_odometry
+ENV DRN_PROFILE=x500-basic
+ENV PX4_GZ_WORLD=default
 
 ENTRYPOINT ["/usr/local/bin/drn-ros-entrypoint"]

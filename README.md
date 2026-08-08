@@ -18,6 +18,8 @@ Project documentation:
   inert scenario contract.
 - [`docs/EVIDENCE_PACKS.md`](docs/EVIDENCE_PACKS.md): bounded MCAP/ULog
   capture, integrity metadata, retention, and replay.
+- [`docs/SIMULATION_PROFILES.md`](docs/SIMULATION_PROFILES.md): supported x500
+  profiles, sensor topics, resource tradeoffs, and validation contract.
 
 Community and project policies:
 
@@ -36,10 +38,28 @@ Start Docker Desktop with the Linux container engine, then run:
 .\scripts\run-sim.ps1
 ```
 
+Use the forward depth-camera profile when working on perception:
+
+```powershell
+.\scripts\run-sim.ps1 -Profile x500-depth
+```
+
+The depth profile automatically uses a GPU only when Docker can initialize a
+hardware EGL renderer for Gazebo. Otherwise it selects lower sensor update
+rates and a 640 x 360 color stream for a more responsive software-rendering
+fallback.
+WSLg/D3D12 graphics bridging is intentionally outside the supported host
+matrix; the rationale is documented with the
+[`x500-depth` profile](docs/SIMULATION_PROFILES.md#supported-host-policy).
+
 ### Bash, Git Bash, or WSL
 
 ```bash
 bash ./scripts/run-sim.sh
+```
+
+```bash
+bash ./scripts/run-sim.sh --profile x500-depth
 ```
 
 The first run builds PX4, Gazebo, the Micro XRCE-DDS Agent, and the ROS workspace, so it can take a while. Later runs use Docker's build cache and redeploy only changed images.
@@ -61,11 +81,13 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Action | PowerShell | Bash |
 | --- | --- | --- |
 | Build/redeploy and start | `.\scripts\run-sim.ps1` | `bash ./scripts/run-sim.sh` |
+| Start x500 with depth camera | `.\scripts\run-sim.ps1 -Profile x500-depth` | `bash ./scripts/run-sim.sh --profile x500-depth` |
 | Show health and topic status | `.\scripts\status.ps1` | `bash ./scripts/status.sh` |
 | Follow all logs | `.\scripts\logs.ps1` | `bash ./scripts/logs.sh` |
 | Follow PX4 logs | `.\scripts\logs.ps1 -Service px4-sitl` | `bash ./scripts/logs.sh px4-sitl` |
 | Run a command in ROS | `.\scripts\run.ps1 ros2 node list` | `bash ./scripts/run.sh ros2 node list` |
 | Restart without rebuilding | `.\scripts\restart.ps1` | `bash ./scripts/restart.sh` |
+| Restart the depth profile | `.\scripts\restart.ps1 -Profile x500-depth` | `bash ./scripts/restart.sh --profile x500-depth` |
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
 | Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
@@ -163,6 +185,7 @@ Pinned upstream revisions:
 - `px4_ros_com` commit `86e9aeb20e55a4673fa8a9f1c29ea06a6c5ad1af`
 - PX4 ROS 2 Interface Library `release/1.17` commit `4a3370f084ac6f1ef001a4afa2b007845ffd0837`
 - Micro XRCE-DDS Agent `v2.4.3`
+- ROS-Gazebo Harmonic bridge `0.244.12-3jammy`
 - ROS 2 Humble on Ubuntu 22.04
 
 ## Flight controls
@@ -222,6 +245,7 @@ The defaults work without creating an environment file. Copy `.env.example` to `
 PX4_SIM_MODEL=gz_x500
 PX4_GZ_WORLD=default
 PX4_SIM_SPEED_FACTOR=1
+DRN_GPU_MODE=auto
 ROS_DOMAIN_ID=0
 FOXGLOVE_PORT=8765
 FOXGLOVE_HOST=127.0.0.1
@@ -230,6 +254,10 @@ QGC_PORT=14550
 ```
 
 The convenience scripts read the same environment variables.
+`DRN_GPU_MODE` accepts `auto` (default), `on` (require a hardware EGL renderer),
+or `off` (force balanced software rendering). Detecting a GPU through
+`nvidia-smi` is not sufficient: the start scripts verify the graphics path that
+Gazebo actually uses.
 PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
 `QGC_PORT`; QGroundControl does not need a remote server entry.
 
@@ -239,6 +267,10 @@ PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
 2. Add a Foxglove WebSocket connection to `ws://localhost:8765`.
 3. Open the **Layouts** menu and select **Import from file...**.
 4. Import [`foxglove/drn-simulation.json`](foxglove/drn-simulation.json).
+
+For `x500-depth`, import
+[`foxglove/drn-simulation-x500-depth.json`](foxglove/drn-simulation-x500-depth.json)
+instead. It places the color and metric-depth feeds beside the 3D vehicle view.
 
 The default layout includes:
 
