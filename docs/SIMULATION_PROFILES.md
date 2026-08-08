@@ -1,13 +1,15 @@
 # Simulation profiles
 
-DRN Stack ships two supported x500 profiles. The default remains the lightweight
-`x500-basic` vehicle. `x500-depth` adds the camera model and the ROS-Gazebo
-bridge needed for perception work without changing PX4, ROS, or Gazebo pins.
+DRN Stack ships three supported profiles on the current x500 airframe. The
+profile contract itself is airframe-neutral: each directory declares its
+airframe, PX4 model, capabilities, and spawned Gazebo model name. New airframes
+can therefore reuse the lifecycle, safety, observation, and validation layers.
 
 | Profile | PX4 model | ROS sensor output | Intended use |
 | --- | --- | --- | --- |
 | `x500-basic` | `gz_x500` | None | Flight-control and project-SDK baseline |
 | `x500-depth` | `gz_x500_depth` | Color, metric depth, camera calibration | Perception, mapping, and avoidance development |
+| `x500-vio` | `gz_x500_vision` | Simulated vision odometry | Localization integration and odometry consumers |
 
 Profiles are small Compose overrides under `profiles/`; the base topology,
 network namespace, safety gates, and lifecycle behavior remain shared.
@@ -20,6 +22,7 @@ PowerShell:
 .\scripts\run-sim.ps1 -Profile x500-depth
 .\scripts\status.ps1 -Profile x500-depth
 .\scripts\restart.ps1 -Profile x500-depth
+.\scripts\run-sim.ps1 -Profile x500-vio
 ```
 
 Bash, Git Bash, or WSL:
@@ -28,11 +31,35 @@ Bash, Git Bash, or WSL:
 bash ./scripts/run-sim.sh --profile x500-depth
 bash ./scripts/status.sh --profile x500-depth
 bash ./scripts/restart.sh --profile x500-depth
+bash ./scripts/run-sim.sh --profile x500-vio
 ```
 
 Pass the profile again when restarting so Compose recreates the same model.
-Stop commands work with the default arguments because both profiles use the
+Stop commands work with the default arguments because all profiles use the
 same `drn-stack` project and service names.
+
+## Profile extension contract
+
+The lifecycle scripts discover profiles from `profiles/<name>/compose.yaml`;
+they do not contain an allowlist of vehicle names. Every profile sets these
+values on `ros-viz`:
+
+| Variable | Purpose |
+| --- | --- |
+| `DRN_PROFILE` | Stable profile identifier matching the directory name |
+| `DRN_AIRFRAME` | Airframe family, currently `x500` |
+| `DRN_PROFILE_CAPABILITIES` | Comma-separated runtime capabilities |
+| `DRN_SIM_MODEL_NAME` | Spawned Gazebo model instance used to resolve topics |
+
+The currently supported capabilities are `depth-camera` and
+`vision-odometry`. ROS launch behavior, health checks, and full smoke checks
+select functionality by capability instead of by airframe name. A profile that
+needs optional GPU rendering can provide matching `compose.gpu.yaml` and
+`compose.software.yaml` files; the lifecycle scripts discover those files too.
+
+Profile Compose files remain small overrides. They must not copy the base
+topology or weaken inert startup, network namespace, Foxglove allowlists, or
+operator gates.
 
 ## GPU acceleration
 
@@ -112,6 +139,27 @@ The Gazebo point-cloud topic is deliberately not bridged in this first slice.
 Consumers should derive a cloud from the depth image and calibration when they
 need one, avoiding duplicate high-bandwidth transport for projects that do not.
 
+## x500-vio ROS contract
+
+The pinned PX4 `gz_x500_vision` model attaches Gazebo's 3D odometry publisher
+to the x500 model. DRN bridges its covariance-bearing message and normalizes the
+model-specific frame labels into this stable ROS contract:
+
+| Topic | Type | Frames | Convention |
+| --- | --- | --- | --- |
+| `/drn/sensors/vision/odometry` | `nav_msgs/msg/Odometry` | `map` -> `base_link` | ENU world, FLU body |
+
+This is deterministic, ground-truth-derived **simulated vision odometry**. It
+does not process camera images or IMU measurements and is not a fidelity claim
+for a real VIO estimator. It is useful for testing integrations that consume
+odometry, frame conventions, covariance, timing, evidence capture, and
+visualization before selecting a real estimator.
+
+PX4's Gazebo bridge also receives the upstream odometry internally. DRN does
+not change EKF2 fusion parameters, disable GPS, inject a second external
+odometry publisher, or claim VIO-only position flight support. Those behaviors
+remain separately researched and operator-validated work.
+
 ## Foxglove
 
 Connect to `ws://localhost:8765` and import
@@ -119,6 +167,11 @@ Connect to `ws://localhost:8765` and import
 The layout shows the vehicle, color image, and depth image. The depth panel uses
 a Turbo color map over 0.2 to 10 metres. The normal control layout remains a
 separate import, keeping this perception-focused view inert by default.
+
+For `x500-vio`, import
+[`foxglove/drn-simulation-x500-vio.json`](../foxglove/drn-simulation-x500-vio.json).
+It shows the stable ENU position stream, complete odometry message, vehicle
+status, and normal 3D view without adding flight controls.
 
 ## Validation and resource expectations
 
@@ -137,3 +190,9 @@ profile supports both NVIDIA-accelerated and balanced software headless
 rendering. Hardware mode uses the upstream resolutions and 30 Hz sensor rates;
 software mode uses 640 x 360 color at 10 Hz and 640 x 480 depth at 15 Hz.
 Actual delivered rates still depend on the Docker host and camera subscribers.
+
+For `x500-vio`, the full smoke check requires three timestamp-distinct samples
+with finite pose, twist, and covariance values; a normalized unit quaternion;
+the stable `map` and `base_link` frames; and a current PX4 status reporting
+disarmed. The upstream odometry publisher does not require camera rendering, so
+the profile does not use the depth profile's GPU overrides.

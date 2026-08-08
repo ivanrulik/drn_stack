@@ -29,25 +29,29 @@ yaml_files+=(compose.yaml compose.evidence.yaml .yamllint.yml)
 yamllint --strict "${yaml_files[@]}"
 
 docker compose --project-name drn-stack --file compose.yaml config --quiet
-for profile in x500-basic x500-depth; do
+for profile_file in profiles/*/compose.yaml; do
   docker compose \
     --project-name drn-stack \
     --file compose.yaml \
-    --file "profiles/${profile}/compose.yaml" \
+    --file "${profile_file}" \
     config --quiet
 done
-docker compose \
-  --project-name drn-stack \
-  --file compose.yaml \
-  --file profiles/x500-depth/compose.yaml \
-  --file profiles/x500-depth/compose.gpu.yaml \
-  config --quiet
-docker compose \
-  --project-name drn-stack \
-  --file compose.yaml \
-  --file profiles/x500-depth/compose.yaml \
-  --file profiles/x500-depth/compose.software.yaml \
-  config --quiet
+for gpu_file in profiles/*/compose.gpu.yaml; do
+  profile_dir="$(dirname "${gpu_file}")"
+  software_file="${profile_dir}/compose.software.yaml"
+  [[ -f "${software_file}" ]] || {
+    echo "${profile_dir} must provide compose.software.yaml with compose.gpu.yaml." >&2
+    exit 1
+  }
+  for renderer_file in "${gpu_file}" "${software_file}"; do
+    docker compose \
+      --project-name drn-stack \
+      --file compose.yaml \
+      --file "${profile_dir}/compose.yaml" \
+      --file "${renderer_file}" \
+      config --quiet
+  done
+done
 DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
   --project-name drn-stack \
   --file compose.yaml \
@@ -60,6 +64,7 @@ python3 -m compileall -q \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
   scripts/docker/sensor-smoke.py \
+  scripts/docker/vision-odometry-smoke.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
 python3 -m unittest discover -s tests
 python3 scripts/docker/project-sdk.py validate \
@@ -200,6 +205,14 @@ for path in Path("foxglove").glob("*.json"):
                 raise ValueError(f"{path}: {panel_id} must render {topic}")
             if panel["imageMode"]["calibrationTopic"] != calibration:
                 raise ValueError(f"{path}: {panel_id} must use {calibration}")
+
+    if path.name == "drn-simulation-x500-vio.json":
+        vision_topic = "/drn/sensors/vision/odometry"
+        if panel_configs["RawMessages!vision"]["topicPath"] != vision_topic:
+            raise ValueError(f"{path}: vision panel must render {vision_topic}")
+        for plot_path in panel_configs["Plot!visionPosition"]["paths"]:
+            if not plot_path["value"].startswith(f"{vision_topic}."):
+                raise ValueError(f"{path}: vision plot must use {vision_topic}")
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

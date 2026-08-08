@@ -1,6 +1,7 @@
 # drn_viz
 
-ROS 2 visualization and transform package for the PX4 x500 model.
+ROS 2 visualization, transform, and profile-sensor adaptation package. The
+current bundled robot model is the PX4 x500.
 
 The package:
 
@@ -9,6 +10,9 @@ The package:
 - Publishes `map -> base_link`.
 - Starts Foxglove Bridge.
 - Publishes an identity transform before the first odometry packet.
+- Selects profile-specific ROS bridges by declared capability rather than
+  airframe name.
+- Normalizes simulated vision odometry to `map` -> `base_link` in ENU/FLU.
 
 ## Docker workflow
 
@@ -50,6 +54,11 @@ ros2 launch drn_viz visualize.launch.py
 - `world_frame`: defaults to `map`.
 - `base_frame`: defaults to `base_link`.
 - `foxglove_port`: defaults to `8765`.
+- `profile`: selected profile directory name; defaults to `x500-basic`.
+- `airframe`: declared airframe family; defaults to `x500`.
+- `capabilities`: comma-separated profile capabilities.
+- `model_name`: spawned Gazebo model instance; defaults to `x500_0`.
+- `world_name`: Gazebo world used to resolve transport topics.
 
 Example:
 
@@ -60,3 +69,9 @@ ros2 launch drn_viz visualize.launch.py \
 ```
 
 The node is read-only and does not publish PX4 commands.
+
+With the `vision-odometry` capability, `ros_gz_bridge` receives Gazebo's
+covariance-bearing model odometry on an internal topic. The
+`vision_odometry_adapter` republishes it as
+`/drn/sensors/vision/odometry` with stable ROS ENU/FLU frame labels. It does not
+configure PX4 estimator fusion or implement a camera/IMU VIO algorithm.
