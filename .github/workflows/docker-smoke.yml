@@ -59,6 +59,7 @@ jobs:
         run: |
           docker compose --project-name drn-stack \
             -f compose.yaml -f profiles/x500-depth/compose.yaml \
+            -f profiles/x500-depth/compose.software.yaml \
             up -d --no-build --wait --wait-timeout 300
 
       - name: Verify depth images, calibration, TF, and inert state
@@ -69,6 +70,7 @@ jobs:
         run: |
           docker compose --project-name drn-stack \
             -f compose.yaml -f profiles/x500-depth/compose.yaml \
+            -f profiles/x500-depth/compose.software.yaml \
             logs --no-color --tail=500
 
       - name: Stop x500-depth profile
@@ -76,6 +78,7 @@ jobs:
         run: |
           docker compose --project-name drn-stack \
             -f compose.yaml -f profiles/x500-depth/compose.yaml \
+            -f profiles/x500-depth/compose.software.yaml \
             down --remove-orphans --volumes --timeout 30
 
       - name: Run inert downstream-project scenario
