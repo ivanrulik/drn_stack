@@ -120,3 +120,24 @@ In the follow-up turn:
 Branch confirmation authorizes only branch creation. Do not implement, stage,
 commit, push, or open a pull request unless the user separately authorizes
 those actions.
+
+## 8. Complete the branch lifecycle after merge
+
+When a later turn explicitly authorizes merging the feature branch, treat
+verified branch cleanup as part of that merge workflow unless the user asks to
+preserve a branch:
+
+1. Confirm the pull request reports `MERGED` and record its merge commit.
+2. Fetch the default branch and verify the remote default branch contains the
+   merge commit.
+3. Require a clean worktree, then switch to the local default branch and
+   fast-forward it to the verified remote state.
+4. Delete the merged local feature branch with `git branch -d`.
+5. Delete the corresponding remote feature branch with
+   `git push origin --delete <branch>`.
+6. Verify that the local and remote feature refs are both absent and report the
+   resulting default-branch state.
+
+Never force-delete an unmerged branch. If cleanup validation fails or the
+worktree is not clean, stop and report the exact blocker instead of discarding
+work.
