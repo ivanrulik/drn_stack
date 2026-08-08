@@ -102,10 +102,13 @@ repository's Docker and WSL storage safeguards.
 Support autonomy and perception development in addition to basic vehicle
 control.
 
-### Initial profiles
+### Delivered foundation profiles
 
 - `x500-basic`: current lightweight baseline.
 - `x500-depth`: forward-facing depth camera.
+
+### Planned profiles
+
 - `x500-vio`: simulated vision odometry.
 - `x500-lidar`: ROS 2 laser or point-cloud output.
 

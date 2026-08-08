@@ -30,7 +30,9 @@ agent_pid=$!
 
 ros2 launch drn_viz visualize.launch.py \
   "odometry_topic:=${ODOMETRY_TOPIC:-/fmu/out/vehicle_odometry}" \
-  "foxglove_port:=${FOXGLOVE_PORT:-8765}" &
+  "foxglove_port:=${FOXGLOVE_PORT:-8765}" \
+  "profile:=${DRN_PROFILE:-x500-basic}" \
+  "world_name:=${PX4_GZ_WORLD:-default}" &
 ros_pid=$!
 
 if [[ -n "${DRN_PROJECT_MANIFEST:-}" ]]; then

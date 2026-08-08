@@ -18,6 +18,7 @@ authorize mixing other branches, tags, or message definitions.
 | PX4 ROS 2 Interface Library | `release/1.17` compatible source | `4a3370f084ac6f1ef001a4afa2b007845ffd0837` |
 | Micro XRCE-DDS Agent | v2.4.3 | `73622810d984349b80bbac0ef55fc0b694d62222` |
 | Gazebo | Harmonic packages selected by the pinned PX4 setup | PX4 image build |
+| ROS-Gazebo bridge | Harmonic 0.244.12 (`ROS_GZ_HARMONIC_VERSION: 0.244.12-3jammy`) | OSRF Ubuntu stable repository |
 | Foxglove Bridge | ROS Humble package resolved at image build time | ROS image build |
 
 Git-based dependencies are pinned to immutable commits. The ROS base image and
@@ -34,6 +35,10 @@ images.
   at their own revision.
 - Alternate upstream versions are experimental unless a branch explicitly
   documents and validates them.
+- WSL may host the Bash lifecycle workflow, but WSLg/Mesa D3D12 graphics
+  bridging is not part of the supported simulation baseline. Windows Docker
+  Desktop falls back to the balanced software sensor configuration when its
+  EGL hardware probe fails.
 - Dependency pins must not be updated incidentally.
 - A pin update requires release notes and issue review for message, transport,
   mode-registration, executor, watchdog, and failsafe compatibility.

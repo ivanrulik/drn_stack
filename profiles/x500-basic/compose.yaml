@@ -1,0 +1,8 @@
+services:
+  ros-viz:
+    environment:
+      DRN_PROFILE: x500-basic
+
+  px4-sitl:
+    environment:
+      PX4_SIM_MODEL: gz_x500
