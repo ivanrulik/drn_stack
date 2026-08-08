@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(px4_ros_com REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -23,6 +24,12 @@ ament_target_dependencies(odometry_tf_bridge
 )
 target_link_libraries(odometry_tf_bridge Eigen3::Eigen)
 
+add_executable(vision_odometry_adapter src/vision_odometry_adapter.cpp)
+ament_target_dependencies(vision_odometry_adapter
+  nav_msgs
+  rclcpp
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
@@ -30,6 +37,7 @@ endif()
 
 install(TARGETS
   odometry_tf_bridge
+  vision_odometry_adapter
   DESTINATION lib/${PROJECT_NAME}
 )
 

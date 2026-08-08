@@ -8,7 +8,6 @@ param(
     [ValidateSet('px4-sitl', 'ros-viz')]
     [string]$Service,
 
-    [ValidateSet('x500-basic', 'x500-depth')]
     [string]$Profile = 'x500-basic',
 
     [switch]$Force
@@ -22,6 +21,14 @@ trap {
 }
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+if ($Profile -notmatch '^[a-z0-9][a-z0-9-]*$') {
+    throw "Invalid profile name '$Profile'. Use lowercase letters, digits, and hyphens."
+}
+$ProfileDirectory = Join-Path $RepoRoot "profiles\$Profile"
+$ProfileCompose = Join-Path $ProfileDirectory 'compose.yaml'
+if (-not (Test-Path -LiteralPath $ProfileCompose -PathType Leaf)) {
+    throw "Unknown profile '$Profile': $ProfileCompose does not exist."
+}
 if ([string]::IsNullOrWhiteSpace($env:COMPOSE_PARALLEL_LIMIT)) {
     $env:COMPOSE_PARALLEL_LIMIT = '1'
 }
@@ -30,7 +37,7 @@ $ComposeArgs = @(
     '--project-name', 'drn-stack',
     '--project-directory', $RepoRoot,
     '-f', (Join-Path $RepoRoot 'compose.yaml'),
-    '-f', (Join-Path $RepoRoot "profiles\$Profile\compose.yaml")
+    '-f', $ProfileCompose
 )
 $GpuAcceleration = 'software'
 
@@ -157,9 +164,16 @@ function Assert-Docker {
     }
 }
 
-function Enable-DepthGpu {
-    if ($Profile -ne 'x500-depth') {
+function Enable-ProfileGpu {
+    $GpuCompose = Join-Path $ProfileDirectory 'compose.gpu.yaml'
+    $SoftwareCompose = Join-Path $ProfileDirectory 'compose.software.yaml'
+    $HasGpuCompose = Test-Path -LiteralPath $GpuCompose -PathType Leaf
+    $HasSoftwareCompose = Test-Path -LiteralPath $SoftwareCompose -PathType Leaf
+    if (-not $HasGpuCompose -and -not $HasSoftwareCompose) {
         return
+    }
+    if (-not $HasGpuCompose -or -not $HasSoftwareCompose) {
+        throw "Profile '$Profile' must provide both compose.gpu.yaml and compose.software.yaml."
     }
 
     $Mode = (Get-Setting -Name 'DRN_GPU_MODE' -Default 'auto').ToLowerInvariant()
@@ -168,7 +182,7 @@ function Enable-DepthGpu {
     }
     if ($Mode -eq 'off') {
         $script:ComposeArgs += @(
-            '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.software.yaml')
+            '-f', $SoftwareCompose
         )
         Write-Host 'GPU acceleration: disabled; using balanced software sensor rates'
         return
@@ -196,7 +210,7 @@ function Enable-DepthGpu {
             )
         }
         $script:ComposeArgs += @(
-            '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.software.yaml')
+            '-f', $SoftwareCompose
         )
         Write-Host (
             'GPU acceleration: no hardware EGL renderer; ' +
@@ -206,7 +220,7 @@ function Enable-DepthGpu {
     }
 
     $script:ComposeArgs += @(
-        '-f', (Join-Path $RepoRoot 'profiles\x500-depth\compose.gpu.yaml')
+        '-f', $GpuCompose
     )
     $script:GpuAcceleration = 'hardware (EGL)'
     Write-Host 'GPU acceleration: hardware EGL renderer enabled'
@@ -251,12 +265,13 @@ function Show-Summary {
     Write-Host ''
     Write-Host 'DRN simulation is ready.'
     Write-Host "Profile: $Profile"
-    if ($Profile -eq 'x500-depth') {
+    if (Test-Path -LiteralPath (Join-Path $ProfileDirectory 'compose.gpu.yaml')) {
         Write-Host "Rendering: $GpuAcceleration"
     }
     Write-Host "Foxglove: ws://localhost:$FoxglovePort"
-    if ($Profile -eq 'x500-depth') {
-        Write-Host 'Foxglove layout: foxglove\drn-simulation-x500-depth.json'
+    $LayoutPath = Join-Path $RepoRoot "foxglove\drn-simulation-$Profile.json"
+    if (Test-Path -LiteralPath $LayoutPath -PathType Leaf) {
+        Write-Host "Foxglove layout: foxglove\drn-simulation-$Profile.json"
     }
     Write-Host "QGroundControl: UDP localhost:$QgcPort"
     Write-Host 'Logs: .\scripts\logs.ps1'
@@ -300,7 +315,7 @@ switch ($Action) {
         try {
             Invoke-Compose build ros-viz
             Invoke-Compose build px4-sitl
-            Enable-DepthGpu
+            Enable-ProfileGpu
             Invoke-Compose config --quiet
             Invoke-Compose up -d --no-build --remove-orphans --wait --wait-timeout 300
             Invoke-FullSmoke
@@ -314,7 +329,7 @@ switch ($Action) {
     'restart' {
         Assert-StorageAvailable
         try {
-            Enable-DepthGpu
+            Enable-ProfileGpu
             Invoke-Compose config --quiet
             Invoke-Compose stop --timeout 30
             Invoke-Compose up -d --no-build --remove-orphans --wait --wait-timeout 300

@@ -17,6 +17,20 @@ class SimulationProfileTests(unittest.TestCase):
         path = REPO_ROOT / 'profiles' / name / 'compose.yaml'
         return yaml.safe_load(path.read_text(encoding='utf-8'))
 
+    def test_profile_directories_are_self_describing(self):
+        profile_paths = sorted((REPO_ROOT / 'profiles').glob('*/compose.yaml'))
+        self.assertGreaterEqual(len(profile_paths), 3)
+        for path in profile_paths:
+            profile = yaml.safe_load(path.read_text(encoding='utf-8'))
+            ros_environment = profile['services']['ros-viz']['environment']
+            self.assertEqual(ros_environment['DRN_PROFILE'], path.parent.name)
+            self.assertRegex(ros_environment['DRN_AIRFRAME'], r'^[a-z0-9][a-z0-9-]*$')
+            self.assertIn('DRN_PROFILE_CAPABILITIES', ros_environment)
+            self.assertRegex(
+                ros_environment['DRN_SIM_MODEL_NAME'],
+                r'^[A-Za-z0-9][A-Za-z0-9_-]*$',
+            )
+
     def test_basic_profile_selects_plain_x500(self):
         profile = self._profile('x500-basic')
         self.assertEqual(
@@ -38,6 +52,27 @@ class SimulationProfileTests(unittest.TestCase):
             profile['services']['ros-viz']['environment']['DRN_PROFILE'],
             'x500-depth',
         )
+        self.assertEqual(
+            profile['services']['ros-viz']['environment'][
+                'DRN_PROFILE_CAPABILITIES'
+            ],
+            'depth-camera',
+        )
+
+    def test_vio_profile_selects_upstream_vision_model(self):
+        profile = self._profile('x500-vio')
+        self.assertEqual(
+            profile['services']['px4-sitl']['environment']['PX4_SIM_MODEL'],
+            'gz_x500_vision',
+        )
+        ros_environment = profile['services']['ros-viz']['environment']
+        self.assertEqual(ros_environment['DRN_PROFILE'], 'x500-vio')
+        self.assertEqual(ros_environment['DRN_AIRFRAME'], 'x500')
+        self.assertEqual(
+            ros_environment['DRN_PROFILE_CAPABILITIES'],
+            'vision-odometry',
+        )
+        self.assertEqual(ros_environment['DRN_SIM_MODEL_NAME'], 'x500_vision_0')
 
     def test_depth_gpu_override_requests_graphics_capability(self):
         path = REPO_ROOT / 'profiles' / 'x500-depth' / 'compose.gpu.yaml'
@@ -85,6 +120,27 @@ class SimulationProfileTests(unittest.TestCase):
             self.assertIn('docker run', script)
             self.assertIn('--gpus', script)
 
+    def test_lifecycle_scripts_discover_profiles_by_directory(self):
+        powershell = (REPO_ROOT / 'scripts/simctl.ps1').read_text(encoding='utf-8')
+        bash = (REPO_ROOT / 'scripts/simctl.sh').read_text(encoding='utf-8')
+        self.assertIn("profiles\\$Profile", powershell)
+        self.assertIn('Test-Path -LiteralPath $ProfileCompose', powershell)
+        self.assertNotIn("ValidateSet('x500-basic', 'x500-depth')", powershell)
+        self.assertIn('profiles/${profile}', bash)
+        self.assertIn('[[ ! -f "${profile_compose}" ]]', bash)
+        self.assertNotIn('x500-basic|x500-depth', bash)
+
+    def test_ros_entrypoint_omits_empty_capability_override(self):
+        entrypoint = (
+            REPO_ROOT / 'scripts/docker/ros-entrypoint.sh'
+        ).read_text(encoding='utf-8')
+        self.assertIn('if [[ -n "${DRN_PROFILE_CAPABILITIES:-}" ]]', entrypoint)
+        self.assertIn(
+            'launch_args+=("capabilities:=${DRN_PROFILE_CAPABILITIES}")',
+            entrypoint,
+        )
+        self.assertNotIn('"capabilities:=${DRN_PROFILE_CAPABILITIES:-}"', entrypoint)
+
     def test_gpu_check_rejects_software_renderers(self):
         check = (REPO_ROOT / 'scripts' / 'docker' / 'gpu-renderer-check.sh').read_text(
             encoding='utf-8'
@@ -129,6 +185,37 @@ class SimulationProfileTests(unittest.TestCase):
         ):
             self.assertIn(topic, launch)
             self.assertIn(topic, smoke)
+
+    def test_vio_launch_adapter_and_smoke_share_contract(self):
+        launch = (REPO_ROOT / 'src/drn_viz/launch/visualize.launch.py').read_text(
+            encoding='utf-8'
+        )
+        adapter = (
+            REPO_ROOT / 'src/drn_viz/src/vision_odometry_adapter.cpp'
+        ).read_text(encoding='utf-8')
+        smoke = (
+            REPO_ROOT / 'scripts/docker/vision-odometry-smoke.py'
+        ).read_text(encoding='utf-8')
+        for source in (launch, adapter, smoke):
+            self.assertIn('/drn/sensors/vision/odometry', source)
+        self.assertIn('gz.msgs.OdometryWithCovariance', launch)
+        self.assertIn('/drn/internal/vision/odometry', adapter)
+        self.assertIn('message->header.frame_id = world_frame_', adapter)
+        self.assertIn('message->child_frame_id = base_frame_', adapter)
+        self.assertIn('ARMING_STATE_DISARMED', smoke)
+
+    def test_vio_layout_uses_stable_ros_topic(self):
+        path = REPO_ROOT / 'foxglove' / 'drn-simulation-x500-vio.json'
+        layout = json.loads(path.read_text(encoding='utf-8'))
+        panels = layout['configById']
+        self.assertEqual(
+            panels['RawMessages!vision']['topicPath'],
+            '/drn/sensors/vision/odometry',
+        )
+        for plot_path in panels['Plot!visionPosition']['paths']:
+            self.assertTrue(
+                plot_path['value'].startswith('/drn/sensors/vision/odometry.')
+            )
 
 
 if __name__ == '__main__':

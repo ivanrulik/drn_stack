@@ -23,9 +23,9 @@ jobs:
       - name: Validate Compose configuration
         run: |
           docker compose --project-name drn-stack -f compose.yaml config --quiet
-          for profile in x500-basic x500-depth; do
+          for profile_file in profiles/*/compose.yaml; do
             docker compose --project-name drn-stack \
-              -f compose.yaml -f "profiles/${profile}/compose.yaml" config --quiet
+              -f compose.yaml -f "${profile_file}" config --quiet
           done
           docker compose --project-name drn-stack \
             -f compose.yaml \
@@ -79,6 +79,29 @@ jobs:
           docker compose --project-name drn-stack \
             -f compose.yaml -f profiles/x500-depth/compose.yaml \
             -f profiles/x500-depth/compose.software.yaml \
+            down --remove-orphans --volumes --timeout 30
+
+      - name: Start x500-vio profile
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-vio/compose.yaml \
+            up -d --no-build --wait --wait-timeout 300
+
+      - name: Verify vision odometry frames, values, and inert state
+        run: bash scripts/simctl.sh smoke --profile x500-vio
+
+      - name: Capture x500-vio logs on failure
+        if: failure()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-vio/compose.yaml \
+            logs --no-color --tail=500
+
+      - name: Stop x500-vio profile
+        if: always()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-vio/compose.yaml \
             down --remove-orphans --volumes --timeout 30
 
       - name: Run inert downstream-project scenario

@@ -106,10 +106,10 @@ control.
 
 - `x500-basic`: current lightweight baseline.
 - `x500-depth`: forward-facing depth camera.
+- `x500-vio`: ground-truth-derived simulated vision odometry.
 
 ### Planned profiles
 
-- `x500-vio`: simulated vision odometry.
 - `x500-lidar`: ROS 2 laser or point-cloud output.
 
 Each profile should own its:
@@ -121,8 +121,10 @@ Each profile should own its:
 - Foxglove layout additions.
 - Focused lint and smoke assertions.
 
-Profiles should remain declarative and composable. Avoid copying complete
-Compose files for every model.
+Profiles remain small Compose overrides discovered by directory. Airframe,
+capabilities, and Gazebo model identity are explicit metadata, while ROS launch
+and validation select behavior by capability instead of hard-coded vehicle
+names. Avoid copying complete Compose files for every model.
 
 ## 4. SITL-to-hardware companion profile
 
@@ -197,8 +199,11 @@ Status: complete.
 
 ### Phase 3: Perception profiles
 
-- Deliver depth-camera and VIO profiles first.
-- Add LiDAR only after measuring image size, startup time, and CI resource cost.
+Status: in progress.
+
+- [x] Deliver depth-camera and simulated vision-odometry profiles.
+- [ ] Add LiDAR only after measuring image size, startup time, and CI resource
+  cost.
 
 ### Phase 4: Hardware parity
 

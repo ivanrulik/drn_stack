@@ -11,6 +11,11 @@ foxglove_listening() {
     /proc/net/tcp /proc/net/tcp6
 }
 
+has_capability() {
+  local capability="$1"
+  [[ ",${DRN_PROFILE_CAPABILITIES:-}," == *",${capability},"* ]]
+}
+
 quick_smoke() {
   local nodes
   local services
@@ -32,12 +37,17 @@ quick_smoke() {
   grep -Fx /drn/control/hold <<<"${services}" >/dev/null
   grep -Fx /drn/control/land <<<"${services}" >/dev/null
   grep -Fx /drn/control/rtl <<<"${services}" >/dev/null
-  if [[ "${DRN_PROFILE:-x500-basic}" == "x500-depth" ]]; then
-    grep -Fx /x500_depth_bridge <<<"${nodes}" >/dev/null
+  if has_capability depth-camera; then
+    grep -Fx /depth_camera_bridge <<<"${nodes}" >/dev/null
     grep -Fx /drn/sensors/front/color/image_raw <<<"${topics}" >/dev/null
     grep -Fx /drn/sensors/front/depth/image_raw <<<"${topics}" >/dev/null
     grep -Fx /drn/sensors/front/color/camera_info <<<"${topics}" >/dev/null
     grep -Fx /drn/sensors/front/depth/camera_info <<<"${topics}" >/dev/null
+  fi
+  if has_capability vision-odometry; then
+    grep -Fx /vision_odometry_bridge <<<"${nodes}" >/dev/null
+    grep -Fx /vision_odometry_adapter <<<"${nodes}" >/dev/null
+    grep -Fx /drn/sensors/vision/odometry <<<"${topics}" >/dev/null
   fi
   foxglove_listening
 }
@@ -72,13 +82,16 @@ full_smoke() {
     timeout 15 ros2 run tf2_ros tf2_echo map base_link 2>&1 |
       grep -m1 -q "Translation"
   )
-  if [[ "${DRN_PROFILE:-x500-basic}" == "x500-depth" ]]; then
+  if has_capability depth-camera; then
     timeout 100 /usr/local/bin/drn-sensor-smoke
     (
       set +o pipefail
       timeout 15 ros2 run tf2_ros tf2_echo base_link camera_link 2>&1 |
         grep -m1 -q "Translation"
     )
+  fi
+  if has_capability vision-odometry; then
+    timeout 100 /usr/local/bin/drn-vision-odometry-smoke
   fi
   foxglove_listening
 }

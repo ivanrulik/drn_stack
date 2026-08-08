@@ -1,0 +1,11 @@
+services:
+  ros-viz:
+    environment:
+      DRN_PROFILE: x500-vio
+      DRN_AIRFRAME: x500
+      DRN_PROFILE_CAPABILITIES: vision-odometry
+      DRN_SIM_MODEL_NAME: x500_vision_0
+
+  px4-sitl:
+    environment:
+      PX4_SIM_MODEL: gz_x500_vision

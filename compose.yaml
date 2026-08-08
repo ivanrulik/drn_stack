@@ -25,6 +25,9 @@ services:
       FOXGLOVE_PORT: "${FOXGLOVE_PORT:-8765}"
       ODOMETRY_TOPIC: "/fmu/out/vehicle_odometry"
       DRN_PROFILE: "x500-basic"
+      DRN_AIRFRAME: "x500"
+      DRN_PROFILE_CAPABILITIES: ""
+      DRN_SIM_MODEL_NAME: "x500_0"
       PX4_GZ_WORLD: "${PX4_GZ_WORLD:-default}"
     ports:
       - "${FOXGLOVE_HOST:-127.0.0.1}:${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"

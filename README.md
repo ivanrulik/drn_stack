@@ -1,6 +1,8 @@
 # DRN Stack
 
-Dockerized PX4 v1.17 SITL, Gazebo Harmonic, ROS 2 Humble, and Foxglove visualization for the x500 quadrotor.
+Dockerized PX4 v1.17 SITL, Gazebo Harmonic, ROS 2 Humble, and Foxglove
+visualization for extensible drone simulation profiles. The current supported
+airframe is the x500 quadrotor.
 
 ![DRN Stack x500 Visualization](resources/drn_viz_x500.png)
 
@@ -18,8 +20,8 @@ Project documentation:
   inert scenario contract.
 - [`docs/EVIDENCE_PACKS.md`](docs/EVIDENCE_PACKS.md): bounded MCAP/ULog
   capture, integrity metadata, retention, and replay.
-- [`docs/SIMULATION_PROFILES.md`](docs/SIMULATION_PROFILES.md): supported x500
-  profiles, sensor topics, resource tradeoffs, and validation contract.
+- [`docs/SIMULATION_PROFILES.md`](docs/SIMULATION_PROFILES.md): airframe-neutral
+  profile contract, supported configurations, sensor topics, and validation.
 
 Community and project policies:
 
@@ -44,6 +46,12 @@ Use the forward depth-camera profile when working on perception:
 .\scripts\run-sim.ps1 -Profile x500-depth
 ```
 
+Use simulated vision odometry when developing localization integrations:
+
+```powershell
+.\scripts\run-sim.ps1 -Profile x500-vio
+```
+
 The depth profile automatically uses a GPU only when Docker can initialize a
 hardware EGL renderer for Gazebo. Otherwise it selects lower sensor update
 rates and a 640 x 360 color stream for a more responsive software-rendering
@@ -62,6 +70,10 @@ bash ./scripts/run-sim.sh
 bash ./scripts/run-sim.sh --profile x500-depth
 ```
 
+```bash
+bash ./scripts/run-sim.sh --profile x500-vio
+```
+
 The first run builds PX4, Gazebo, the Micro XRCE-DDS Agent, and the ROS workspace, so it can take a while. Later runs use Docker's build cache and redeploy only changed images.
 
 When the readiness checks pass:
@@ -69,6 +81,7 @@ When the readiness checks pass:
 - Foxglove: `ws://localhost:8765`
 - QGroundControl: listens for UDP on `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
+- Simulated vision odometry with `x500-vio`: `/drn/sensors/vision/odometry`
 - DRN control status: `/drn/control/status`
 - Horizontal mouse control: `/drn/control/teleop/xy`
 - Altitude/yaw mouse control: `/drn/control/teleop/z_yaw`
@@ -82,12 +95,14 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | --- | --- | --- |
 | Build/redeploy and start | `.\scripts\run-sim.ps1` | `bash ./scripts/run-sim.sh` |
 | Start x500 with depth camera | `.\scripts\run-sim.ps1 -Profile x500-depth` | `bash ./scripts/run-sim.sh --profile x500-depth` |
+| Start x500 with simulated vision odometry | `.\scripts\run-sim.ps1 -Profile x500-vio` | `bash ./scripts/run-sim.sh --profile x500-vio` |
 | Show health and topic status | `.\scripts\status.ps1` | `bash ./scripts/status.sh` |
 | Follow all logs | `.\scripts\logs.ps1` | `bash ./scripts/logs.sh` |
 | Follow PX4 logs | `.\scripts\logs.ps1 -Service px4-sitl` | `bash ./scripts/logs.sh px4-sitl` |
 | Run a command in ROS | `.\scripts\run.ps1 ros2 node list` | `bash ./scripts/run.sh ros2 node list` |
 | Restart without rebuilding | `.\scripts\restart.ps1` | `bash ./scripts/restart.sh` |
 | Restart the depth profile | `.\scripts\restart.ps1 -Profile x500-depth` | `bash ./scripts/restart.sh --profile x500-depth` |
+| Restart the vision-odometry profile | `.\scripts\restart.ps1 -Profile x500-vio` | `bash ./scripts/restart.sh --profile x500-vio` |
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
 | Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
@@ -271,6 +286,11 @@ PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
 For `x500-depth`, import
 [`foxglove/drn-simulation-x500-depth.json`](foxglove/drn-simulation-x500-depth.json)
 instead. It places the color and metric-depth feeds beside the 3D vehicle view.
+
+For `x500-vio`, import
+[`foxglove/drn-simulation-x500-vio.json`](foxglove/drn-simulation-x500-vio.json).
+It provides ENU vision-position plots and raw odometry/status inspection without
+adding Teleop controls.
 
 The default layout includes:
 

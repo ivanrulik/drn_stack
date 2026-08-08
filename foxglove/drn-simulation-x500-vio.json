@@ -1,0 +1,131 @@
+{
+  "configById": {
+    "3D!vision": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 8,
+        "phi": 45,
+        "thetaOffset": 135,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "ignoreColladaUpAxis": true,
+        "transforms": {
+          "showLabel": false,
+          "axisScale": 0.5
+        }
+      },
+      "transforms": {
+        "frame:map": {"visible": true},
+        "frame:base_link": {"visible": true}
+      },
+      "topics": {
+        "/robot_description": {"visible": true}
+      },
+      "layers": {
+        "vision-map-grid": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Map grid",
+          "instanceId": "vision-map-grid",
+          "layerId": "foxglove.Grid",
+          "frameId": "map",
+          "size": 20,
+          "divisions": 20,
+          "lineWidth": 1,
+          "color": "#6b7280",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/drn/control/setpoint",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "foxglovePanelTitle": "Vision Odometry Simulation"
+    },
+    "Plot!visionPosition": {
+      "title": "Vision position (ENU)",
+      "paths": [
+        {
+          "value": "/drn/sensors/vision/odometry.pose.pose.position.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "East"
+        },
+        {
+          "value": "/drn/sensors/vision/odometry.pose.pose.position.y",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "North"
+        },
+        {
+          "value": "/drn/sensors/vision/odometry.pose.pose.position.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Up"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Vision Position (ENU)"
+    },
+    "RawMessages!vision": {
+      "topicPath": "/drn/sensors/vision/odometry",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Vision Odometry"
+    },
+    "RawMessages!status": {
+      "topicPath": "/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Vehicle Status"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime",
+    "timeDisplayMethod": "ROS"
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!vision",
+    "second": {
+      "direction": "column",
+      "first": "Plot!visionPosition",
+      "second": {
+        "direction": "row",
+        "first": "RawMessages!vision",
+        "second": "RawMessages!status",
+        "splitPercentage": 60
+      },
+      "splitPercentage": 55
+    },
+    "splitPercentage": 58
+  }
+}

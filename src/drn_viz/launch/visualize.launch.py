@@ -1,6 +1,7 @@
 """Launch the DRN x500 visualization and PX4 odometry bridge."""
 
 import os
+import re
 
 from ament_index_python.packages import (
     get_package_prefix,
@@ -29,10 +30,27 @@ def _launch_setup(context, *args, **kwargs):
     base_frame = LaunchConfiguration('base_frame').perform(context)
     foxglove_port = int(LaunchConfiguration('foxglove_port').perform(context))
     profile = LaunchConfiguration('profile').perform(context)
+    airframe = LaunchConfiguration('airframe').perform(context)
+    capabilities = {
+        capability
+        for capability in LaunchConfiguration('capabilities').perform(context).split(',')
+        if capability
+    }
+    model_name = LaunchConfiguration('model_name').perform(context)
     world_name = LaunchConfiguration('world_name').perform(context)
 
-    if profile not in ('x500-basic', 'x500-depth'):
-        raise RuntimeError(f"Unsupported DRN profile: {profile}")
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', profile):
+        raise RuntimeError(f"Invalid DRN profile name: {profile}")
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', airframe):
+        raise RuntimeError(f"Invalid DRN airframe name: {airframe}")
+    supported_capabilities = {'depth-camera', 'vision-odometry'}
+    unknown_capabilities = capabilities - supported_capabilities
+    if unknown_capabilities:
+        raise RuntimeError(
+            f"Unsupported DRN profile capabilities: {sorted(unknown_capabilities)}"
+        )
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', model_name):
+        raise RuntimeError(f"Invalid Gazebo model name: {model_name}")
 
     with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
         robot_description = urdf_file.read()
@@ -104,9 +122,9 @@ def _launch_setup(context, *args, **kwargs):
                 LogInfo(msg='joint_state_publisher was requested but is not installed. Skipping.')
             )
 
-    if profile == 'x500-depth':
+    if 'depth-camera' in capabilities:
         color_gz_topic = (
-            f'/world/{world_name}/model/x500_depth_0/link/camera_link/'
+            f'/world/{world_name}/model/{model_name}/link/camera_link/'
             'sensor/IMX214/image'
         )
         color_info_gz_topic = (
@@ -119,7 +137,7 @@ def _launch_setup(context, *args, **kwargs):
             Node(
                 package='ros_gz_bridge',
                 executable='parameter_bridge',
-                name='x500_depth_bridge',
+                name='depth_camera_bridge',
                 output='screen',
                 arguments=[
                     f'{color_gz_topic}@sensor_msgs/msg/Image[gz.msgs.Image',
@@ -143,7 +161,7 @@ def _launch_setup(context, *args, **kwargs):
             Node(
                 package='tf2_ros',
                 executable='static_transform_publisher',
-                name='x500_depth_camera_tf',
+                name='depth_camera_tf',
                 output='screen',
                 arguments=[
                     '--x', '0.13233', '--y', '0', '--z', '0.26078',
@@ -153,6 +171,37 @@ def _launch_setup(context, *args, **kwargs):
                     '--frame-id', base_frame,
                     '--child-frame-id', 'camera_link',
                 ],
+            ),
+        ])
+
+    if 'vision-odometry' in capabilities:
+        vision_gz_topic = f'/model/{model_name}/odometry_with_covariance'
+        raw_vision_topic = '/drn/internal/vision/odometry'
+        nodes.extend([
+            Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                name='vision_odometry_bridge',
+                output='screen',
+                arguments=[
+                    f'{vision_gz_topic}@nav_msgs/msg/Odometry'
+                    '[gz.msgs.OdometryWithCovariance',
+                ],
+                remappings=[
+                    (vision_gz_topic, raw_vision_topic),
+                ],
+            ),
+            Node(
+                package='drn_viz',
+                executable='vision_odometry_adapter',
+                name='vision_odometry_adapter',
+                output='screen',
+                parameters=[{
+                    'input_topic': raw_vision_topic,
+                    'output_topic': '/drn/sensors/vision/odometry',
+                    'world_frame': world_frame,
+                    'base_frame': base_frame,
+                }],
             ),
         ])
 
@@ -198,7 +247,22 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'profile',
             default_value='x500-basic',
-            description='Simulation profile: x500-basic or x500-depth.',
+            description='Selected profile directory name.',
+        ),
+        DeclareLaunchArgument(
+            'airframe',
+            default_value='x500',
+            description='Airframe family declared by the selected profile.',
+        ),
+        DeclareLaunchArgument(
+            'capabilities',
+            default_value='',
+            description='Comma-separated profile capabilities.',
+        ),
+        DeclareLaunchArgument(
+            'model_name',
+            default_value='x500_0',
+            description='Spawned Gazebo model instance name.',
         ),
         DeclareLaunchArgument(
             'world_name',

@@ -14,7 +14,7 @@ while (( $# > 0 )); do
   case "$1" in
     --profile)
       if (( $# < 2 )); then
-        echo "--profile requires x500-basic or x500-depth." >&2
+        echo "--profile requires a profile name from the profiles directory." >&2
         exit 2
       fi
       profile="$2"
@@ -28,20 +28,23 @@ while (( $# > 0 )); do
 done
 set -- "${remaining_args[@]}"
 
-case "${profile}" in
-  x500-basic|x500-depth) ;;
-  *)
-    echo "Unknown profile '${profile}'. Use x500-basic or x500-depth." >&2
-    exit 2
-    ;;
-esac
+if [[ ! "${profile}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "Invalid profile name '${profile}'. Use lowercase letters, digits, and hyphens." >&2
+  exit 2
+fi
+profile_dir="${REPO_ROOT}/profiles/${profile}"
+profile_compose="${profile_dir}/compose.yaml"
+if [[ ! -f "${profile_compose}" ]]; then
+  echo "Unknown profile '${profile}': ${profile_compose} does not exist." >&2
+  exit 2
+fi
 
 COMPOSE=(
   docker compose
   --project-name drn-stack
   --project-directory "${REPO_ROOT}"
   -f "${REPO_ROOT}/compose.yaml"
-  -f "${REPO_ROOT}/profiles/${profile}/compose.yaml"
+  -f "${profile_compose}"
 )
 gpu_acceleration="software"
 
@@ -68,9 +71,17 @@ require_docker() {
   fi
 }
 
-enable_depth_gpu() {
+enable_profile_gpu() {
   local mode="${DRN_GPU_MODE:-auto}"
-  [[ "${profile}" == "x500-depth" ]] || return 0
+  local gpu_compose="${profile_dir}/compose.gpu.yaml"
+  local software_compose="${profile_dir}/compose.software.yaml"
+  if [[ ! -f "${gpu_compose}" && ! -f "${software_compose}" ]]; then
+    return 0
+  fi
+  if [[ ! -f "${gpu_compose}" || ! -f "${software_compose}" ]]; then
+    echo "Profile '${profile}' must provide both compose.gpu.yaml and compose.software.yaml." >&2
+    exit 2
+  fi
 
   case "${mode}" in
     auto|on|off) ;;
@@ -80,7 +91,7 @@ enable_depth_gpu() {
       ;;
   esac
   if [[ "${mode}" == "off" ]]; then
-    COMPOSE+=(-f "${REPO_ROOT}/profiles/x500-depth/compose.software.yaml")
+    COMPOSE+=(-f "${software_compose}")
     echo "GPU acceleration: disabled; using balanced software sensor rates"
     return 0
   fi
@@ -94,12 +105,12 @@ enable_depth_gpu() {
       echo "DRN_GPU_MODE=on was requested, but Docker could not initialize a hardware EGL renderer for Gazebo." >&2
       exit 1
     fi
-    COMPOSE+=(-f "${REPO_ROOT}/profiles/x500-depth/compose.software.yaml")
+    COMPOSE+=(-f "${software_compose}")
     echo "GPU acceleration: no hardware EGL renderer; using balanced software sensor rates"
     return 0
   fi
 
-  COMPOSE+=(-f "${REPO_ROOT}/profiles/x500-depth/compose.gpu.yaml")
+  COMPOSE+=(-f "${gpu_compose}")
   gpu_acceleration="hardware (EGL)"
   echo "GPU acceleration: hardware EGL renderer enabled"
 }
@@ -154,16 +165,17 @@ dump_failure() {
 }
 
 print_summary() {
+  local layout_path="${REPO_ROOT}/foxglove/drn-simulation-${profile}.json"
   compose ps
   echo
   echo "DRN simulation is ready."
   echo "Profile: ${profile}"
-  if [[ "${profile}" == "x500-depth" ]]; then
+  if [[ -f "${profile_dir}/compose.gpu.yaml" ]]; then
     echo "Rendering: ${gpu_acceleration}"
   fi
   echo "Foxglove: ws://localhost:${FOXGLOVE_PORT:-8765}"
-  if [[ "${profile}" == "x500-depth" ]]; then
-    echo "Foxglove layout: foxglove/drn-simulation-x500-depth.json"
+  if [[ -f "${layout_path}" ]]; then
+    echo "Foxglove layout: foxglove/drn-simulation-${profile}.json"
   fi
   echo "QGroundControl: UDP localhost:${QGC_PORT:-14550}"
   echo "Logs: ./scripts/logs.sh"
@@ -188,7 +200,7 @@ run_stack() {
     dump_failure
     exit 1
   fi
-  enable_depth_gpu
+  enable_profile_gpu
   compose config --quiet
   if ! compose up -d --no-build --remove-orphans --wait --wait-timeout 300; then
     dump_failure
@@ -211,7 +223,7 @@ stop_stack() {
 
 restart_stack() {
   require_docker
-  enable_depth_gpu
+  enable_profile_gpu
   check_storage
   compose stop --timeout 30
   if ! compose up -d --no-build --remove-orphans --wait --wait-timeout 300; then
@@ -270,7 +282,7 @@ case "${action}" in
   clean) clean_stack "$@" ;;
   smoke) require_docker; smoke_full ;;
   *)
-    echo "Usage: $0 {run|stop|restart|status|logs|clean|smoke} [--profile x500-basic|x500-depth]" >&2
+    echo "Usage: $0 {run|stop|restart|status|logs|clean|smoke} [--profile NAME]" >&2
     exit 2
     ;;
 esac
