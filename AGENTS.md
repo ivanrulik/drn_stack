@@ -122,5 +122,9 @@ actually performed that SITL test.
 - Preserve unrelated user changes in a dirty worktree.
 - Do not stage, commit, push, create a PR, or merge without explicit user
   authorization.
+- After an authorized feature-branch merge into `main`, verify the resulting
+  local and remote `main` state, then delete both the local feature branch and
+  its remote tracking branch because they have served their purpose. Preserve
+  either branch only when the user explicitly requests it.
 - PR descriptions should list validation performed and clearly identify any
   operator-in-the-loop flight checks that remain pending.
