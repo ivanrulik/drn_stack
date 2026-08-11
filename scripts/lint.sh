@@ -63,6 +63,7 @@ python3 -m compileall -q \
   scripts/docker/evidence.py \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
+  scripts/docker/lidar-smoke.py \
   scripts/docker/sensor-smoke.py \
   scripts/docker/vision-odometry-smoke.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
@@ -213,6 +214,13 @@ for path in Path("foxglove").glob("*.json"):
         for plot_path in panel_configs["Plot!visionPosition"]["paths"]:
             if not plot_path["value"].startswith(f"{vision_topic}."):
                 raise ValueError(f"{path}: vision plot must use {vision_topic}")
+
+    if path.name == "drn-simulation-x500-lidar.json":
+        lidar_topic = "/drn/sensors/lidar/scan"
+        if panel_configs["RawMessages!lidar"]["topicPath"] != lidar_topic:
+            raise ValueError(f"{path}: LiDAR panel must render {lidar_topic}")
+        if not panel_configs["3D!lidar"]["topics"][lidar_topic]["visible"]:
+            raise ValueError(f"{path}: 3D panel must render {lidar_topic}")
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

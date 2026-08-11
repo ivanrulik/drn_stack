@@ -1,6 +1,6 @@
 # Open-source Ecosystem Roadmap
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-10
 
 ## Purpose
 
@@ -107,10 +107,7 @@ control.
 - `x500-basic`: current lightweight baseline.
 - `x500-depth`: forward-facing depth camera.
 - `x500-vio`: ground-truth-derived simulated vision odometry.
-
-### Planned profiles
-
-- `x500-lidar`: ROS 2 laser or point-cloud output.
+- `x500-lidar`: 270-degree ROS 2 laser-scan output.
 
 Each profile should own its:
 
@@ -199,11 +196,10 @@ Status: complete.
 
 ### Phase 3: Perception profiles
 
-Status: in progress.
+Status: complete.
 
 - [x] Deliver depth-camera and simulated vision-odometry profiles.
-- [ ] Add LiDAR only after measuring image size, startup time, and CI resource
-  cost.
+- [x] Add LiDAR after measuring image size, startup time, and CI resource cost.
 
 ### Phase 4: Hardware parity
 

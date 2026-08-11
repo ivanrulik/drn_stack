@@ -13,6 +13,7 @@ The package:
 - Selects profile-specific ROS bridges by declared capability rather than
   airframe name.
 - Normalizes simulated vision odometry to `map` -> `base_link` in ENU/FLU.
+- Bridges rendered 2D LiDAR through a stable `lidar_link` LaserScan contract.
 
 ## Docker workflow
 
@@ -75,3 +76,9 @@ covariance-bearing model odometry on an internal topic. The
 `vision_odometry_adapter` republishes it as
 `/drn/sensors/vision/odometry` with stable ROS ENU/FLU frame labels. It does not
 configure PX4 estimator fusion or implement a camera/IMU VIO algorithm.
+
+With the `laser-scan` capability, `ros_gz_bridge` receives the selected model's
+rendered scan on an internal topic. `laser_scan_adapter` republishes it as
+`/drn/sensors/lidar/scan` with the stable `lidar_link` frame, while the launch
+file publishes `base_link -> lidar_link`. It does not enable collision
+prevention or publish vehicle commands.
