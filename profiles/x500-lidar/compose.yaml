@@ -1,0 +1,13 @@
+services:
+  ros-viz:
+    environment:
+      DRN_PROFILE: x500-lidar
+      DRN_AIRFRAME: x500
+      DRN_PROFILE_CAPABILITIES: laser-scan
+      DRN_SIM_MODEL_NAME: x500_lidar_2d_0
+      PX4_GZ_WORLD: "${PX4_GZ_WORLD:-walls}"
+
+  px4-sitl:
+    environment:
+      PX4_SIM_MODEL: gz_x500_lidar_2d
+      PX4_GZ_WORLD: "${PX4_GZ_WORLD:-walls}"

@@ -33,3 +33,11 @@ model in `PX4/PX4-Autopilot` at pinned commit
 `a5eb12d2ab591251faa009f76b2685b8cc64405d`. DRN changes only the color
 resolution and the color/depth update rates used by the software-rendering
 fallback. PX4-Autopilot is distributed under the BSD-3-Clause license.
+
+## PX4 2D LiDAR sensor model
+
+`profiles/x500-lidar/models/lidar_2d_v2/model.sdf` is derived from the
+`lidar_2d_v2` model in `PX4/PX4-gazebo-models` at the PX4-pinned submodule
+commit `b6127f4ec20de867e215fb5f78ae88b80f371909`. DRN changes only the update
+rate used by the software-rendering fallback. PX4-gazebo-models is distributed
+under the BSD-3-Clause license.

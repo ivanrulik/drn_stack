@@ -43,7 +43,7 @@ def _launch_setup(context, *args, **kwargs):
         raise RuntimeError(f"Invalid DRN profile name: {profile}")
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', airframe):
         raise RuntimeError(f"Invalid DRN airframe name: {airframe}")
-    supported_capabilities = {'depth-camera', 'vision-odometry'}
+    supported_capabilities = {'depth-camera', 'laser-scan', 'vision-odometry'}
     unknown_capabilities = capabilities - supported_capabilities
     if unknown_capabilities:
         raise RuntimeError(
@@ -202,6 +202,60 @@ def _launch_setup(context, *args, **kwargs):
                     'world_frame': world_frame,
                     'base_frame': base_frame,
                 }],
+            ),
+        ])
+
+    if 'laser-scan' in capabilities:
+        lidar_gz_topic = (
+            f'/world/{world_name}/model/{model_name}/link/link/'
+            'sensor/lidar_2d_v2/scan'
+        )
+        raw_lidar_topic = '/drn/internal/lidar/scan'
+        nodes.extend([
+            Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                name='lidar_bridge',
+                output='screen',
+                arguments=[
+                    f'{lidar_gz_topic}@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+                ],
+                remappings=[
+                    (lidar_gz_topic, raw_lidar_topic),
+                ],
+            ),
+            Node(
+                package='drn_viz',
+                executable='laser_scan_adapter',
+                name='laser_scan_adapter',
+                output='screen',
+                parameters=[{
+                    'input_topic': raw_lidar_topic,
+                    'output_topic': '/drn/sensors/lidar/scan',
+                    'output_frame': 'lidar_link',
+                }],
+            ),
+            Node(
+                package='drn_viz',
+                executable='lidar_world_markers',
+                name='lidar_world_markers',
+                output='screen',
+                parameters=[{
+                    'frame_id': world_frame,
+                    'topic': '/drn/viz/lidar/walls',
+                }],
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='lidar_tf',
+                output='screen',
+                arguments=[
+                    '--x', '0.12', '--y', '0', '--z', '0.315',
+                    '--roll', '0', '--pitch', '0', '--yaw', '0',
+                    '--frame-id', base_frame,
+                    '--child-frame-id', 'lidar_link',
+                ],
             ),
         ])
 

@@ -11,7 +11,9 @@ find_package(nav_msgs REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(px4_ros_com REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 add_executable(odometry_tf_bridge src/odometry_tf_bridge.cpp)
@@ -30,12 +32,26 @@ ament_target_dependencies(vision_odometry_adapter
   rclcpp
 )
 
+add_executable(laser_scan_adapter src/laser_scan_adapter.cpp)
+ament_target_dependencies(laser_scan_adapter
+  rclcpp
+  sensor_msgs
+)
+
+add_executable(lidar_world_markers src/lidar_world_markers.cpp)
+ament_target_dependencies(lidar_world_markers
+  rclcpp
+  visualization_msgs
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
 
 install(TARGETS
+  laser_scan_adapter
+  lidar_world_markers
   odometry_tf_bridge
   vision_odometry_adapter
   DESTINATION lib/${PROJECT_NAME}

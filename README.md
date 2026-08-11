@@ -52,10 +52,15 @@ Use simulated vision odometry when developing localization integrations:
 .\scripts\run-sim.ps1 -Profile x500-vio
 ```
 
-The depth profile automatically uses a GPU only when Docker can initialize a
-hardware EGL renderer for Gazebo. Otherwise it selects lower sensor update
-rates and a 640 x 360 color stream for a more responsive software-rendering
-fallback.
+Use the 270-degree 2D LiDAR profile for laser-scan consumers:
+
+```powershell
+.\scripts\run-sim.ps1 -Profile x500-lidar
+```
+
+The depth and LiDAR profiles automatically use a GPU only when Docker can
+initialize a hardware EGL renderer for Gazebo. Otherwise they select balanced
+software-rendering sensor rates; depth also uses a 640 x 360 color stream.
 WSLg/D3D12 graphics bridging is intentionally outside the supported host
 matrix; the rationale is documented with the
 [`x500-depth` profile](docs/SIMULATION_PROFILES.md#supported-host-policy).
@@ -74,6 +79,10 @@ bash ./scripts/run-sim.sh --profile x500-depth
 bash ./scripts/run-sim.sh --profile x500-vio
 ```
 
+```bash
+bash ./scripts/run-sim.sh --profile x500-lidar
+```
+
 The first run builds PX4, Gazebo, the Micro XRCE-DDS Agent, and the ROS workspace, so it can take a while. Later runs use Docker's build cache and redeploy only changed images.
 
 When the readiness checks pass:
@@ -82,6 +91,7 @@ When the readiness checks pass:
 - QGroundControl: listens for UDP on `localhost:14550`
 - PX4 odometry: `/fmu/out/vehicle_odometry`
 - Simulated vision odometry with `x500-vio`: `/drn/sensors/vision/odometry`
+- 2D LiDAR with `x500-lidar`: `/drn/sensors/lidar/scan`
 - DRN control status: `/drn/control/status`
 - Horizontal mouse control: `/drn/control/teleop/xy`
 - Altitude/yaw mouse control: `/drn/control/teleop/z_yaw`
@@ -96,6 +106,7 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Build/redeploy and start | `.\scripts\run-sim.ps1` | `bash ./scripts/run-sim.sh` |
 | Start x500 with depth camera | `.\scripts\run-sim.ps1 -Profile x500-depth` | `bash ./scripts/run-sim.sh --profile x500-depth` |
 | Start x500 with simulated vision odometry | `.\scripts\run-sim.ps1 -Profile x500-vio` | `bash ./scripts/run-sim.sh --profile x500-vio` |
+| Start x500 with 2D LiDAR | `.\scripts\run-sim.ps1 -Profile x500-lidar` | `bash ./scripts/run-sim.sh --profile x500-lidar` |
 | Show health and topic status | `.\scripts\status.ps1` | `bash ./scripts/status.sh` |
 | Follow all logs | `.\scripts\logs.ps1` | `bash ./scripts/logs.sh` |
 | Follow PX4 logs | `.\scripts\logs.ps1 -Service px4-sitl` | `bash ./scripts/logs.sh px4-sitl` |
@@ -103,6 +114,7 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Restart without rebuilding | `.\scripts\restart.ps1` | `bash ./scripts/restart.sh` |
 | Restart the depth profile | `.\scripts\restart.ps1 -Profile x500-depth` | `bash ./scripts/restart.sh --profile x500-depth` |
 | Restart the vision-odometry profile | `.\scripts\restart.ps1 -Profile x500-vio` | `bash ./scripts/restart.sh --profile x500-vio` |
+| Restart the LiDAR profile | `.\scripts\restart.ps1 -Profile x500-lidar` | `bash ./scripts/restart.sh --profile x500-lidar` |
 | Stop and preserve images/cache | `.\scripts\stop.ps1` | `bash ./scripts/stop.sh` |
 | Remove this stack's images/state | `.\scripts\clean.ps1 -Force` | `bash ./scripts/clean.sh --yes` |
 | Run the example project scenario | `.\scripts\run-scenario.ps1 projects\example_inspection startup-health` | `bash ./scripts/run-scenario.sh projects/example_inspection startup-health` |
@@ -291,6 +303,14 @@ For `x500-vio`, import
 [`foxglove/drn-simulation-x500-vio.json`](foxglove/drn-simulation-x500-vio.json).
 It provides ENU vision-position plots and raw odometry/status inspection without
 adding Teleop controls.
+
+For `x500-lidar`, import
+[`foxglove/drn-simulation-x500-lidar.json`](foxglove/drn-simulation-x500-lidar.json).
+It renders the stable 2D laser scan in the 3D scene alongside raw scan and
+vehicle-status inspection, without adding Teleop controls. The profile selects
+PX4's pinned `walls` world so finite returns appear as magenta points around the
+stationary, disarmed vehicle. Translucent blue wall markers provide the matching
+scene geometry in Foxglove.
 
 The default layout includes:
 

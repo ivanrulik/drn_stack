@@ -91,6 +91,7 @@ COPY scripts/docker/evidence.py /usr/local/bin/drn-evidence
 COPY scripts/docker/ros-environment.sh /usr/local/bin/drn-ros-environment
 COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
 COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
+COPY scripts/docker/lidar-smoke.py /usr/local/bin/drn-lidar-smoke
 COPY scripts/docker/sensor-smoke.py /usr/local/bin/drn-sensor-smoke
 COPY scripts/docker/vision-odometry-smoke.py /usr/local/bin/drn-vision-odometry-smoke
 COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
@@ -98,6 +99,7 @@ COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
 RUN sed -i 's/\r$//' \
         /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
+        /usr/local/bin/drn-lidar-smoke \
         /usr/local/bin/drn-sensor-smoke \
         /usr/local/bin/drn-vision-odometry-smoke \
     && chmod 0755 \
@@ -106,6 +108,7 @@ RUN sed -i 's/\r$//' \
         /usr/local/bin/drn-ros-environment \
         /usr/local/bin/drn-ros-entrypoint \
         /usr/local/bin/drn-ros-healthcheck \
+        /usr/local/bin/drn-lidar-smoke \
         /usr/local/bin/drn-sensor-smoke \
         /usr/local/bin/drn-vision-odometry-smoke \
         /usr/local/bin/drn-smoke-test \

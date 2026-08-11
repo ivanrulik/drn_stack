@@ -27,14 +27,16 @@ jobs:
             docker compose --project-name drn-stack \
               -f compose.yaml -f "${profile_file}" config --quiet
           done
-          docker compose --project-name drn-stack \
-            -f compose.yaml \
-            -f profiles/x500-depth/compose.yaml \
-            -f profiles/x500-depth/compose.gpu.yaml config --quiet
-          docker compose --project-name drn-stack \
-            -f compose.yaml \
-            -f profiles/x500-depth/compose.yaml \
-            -f profiles/x500-depth/compose.software.yaml config --quiet
+          for gpu_file in profiles/*/compose.gpu.yaml; do
+            profile_dir="$(dirname "${gpu_file}")"
+            for renderer_file in \
+              "${gpu_file}" "${profile_dir}/compose.software.yaml"; do
+              docker compose --project-name drn-stack \
+                -f compose.yaml \
+                -f "${profile_dir}/compose.yaml" \
+                -f "${renderer_file}" config --quiet
+            done
+          done
 
       - name: Build pinned images
         run: |
@@ -102,6 +104,52 @@ jobs:
         run: |
           docker compose --project-name drn-stack \
             -f compose.yaml -f profiles/x500-vio/compose.yaml \
+            down --remove-orphans --volumes --timeout 30
+
+      - name: Start x500-lidar profile and record resource baseline
+        run: |
+          started_at="$(date +%s)"
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-lidar/compose.yaml \
+            -f profiles/x500-lidar/compose.software.yaml \
+            up -d --no-build --wait --wait-timeout 300
+          startup_seconds="$(($(date +%s) - started_at))"
+          px4_bytes="$(docker image inspect \
+            drn-stack/px4-sitl:v1.17.0 --format '{{.Size}}')"
+          ros_bytes="$(docker image inspect \
+            drn-stack/ros-viz:humble --format '{{.Size}}')"
+          {
+            echo '### x500-lidar resource baseline'
+            echo
+            echo "- Startup to healthy: ${startup_seconds} seconds"
+            echo "- PX4 image: ${px4_bytes} bytes"
+            echo "- ROS image: ${ros_bytes} bytes"
+            echo
+            echo '| Container | CPU | Memory | PIDs |'
+            echo '| --- | ---: | ---: | ---: |'
+            docker stats --no-stream \
+              --format '| {{.Name}} | {{.CPUPerc}} | {{.MemUsage}} | {{.PIDs}} |' \
+              drn-stack-ros-viz-1 drn-stack-px4-sitl-1
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+          test "${startup_seconds}" -le 300
+
+      - name: Verify LiDAR scan, TF, and inert state
+        run: bash scripts/simctl.sh smoke --profile x500-lidar
+
+      - name: Capture x500-lidar logs on failure
+        if: failure()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-lidar/compose.yaml \
+            -f profiles/x500-lidar/compose.software.yaml \
+            logs --no-color --tail=500
+
+      - name: Stop x500-lidar profile
+        if: always()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-lidar/compose.yaml \
+            -f profiles/x500-lidar/compose.software.yaml \
             down --remove-orphans --volumes --timeout 30
 
       - name: Run inert downstream-project scenario

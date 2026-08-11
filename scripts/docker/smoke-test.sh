@@ -49,6 +49,13 @@ quick_smoke() {
     grep -Fx /vision_odometry_adapter <<<"${nodes}" >/dev/null
     grep -Fx /drn/sensors/vision/odometry <<<"${topics}" >/dev/null
   fi
+  if has_capability laser-scan; then
+    grep -Fx /lidar_bridge <<<"${nodes}" >/dev/null
+    grep -Fx /laser_scan_adapter <<<"${nodes}" >/dev/null
+    grep -Fx /lidar_world_markers <<<"${nodes}" >/dev/null
+    grep -Fx /drn/sensors/lidar/scan <<<"${topics}" >/dev/null
+    grep -Fx /drn/viz/lidar/walls <<<"${topics}" >/dev/null
+  fi
   foxglove_listening
 }
 
@@ -92,6 +99,14 @@ full_smoke() {
   fi
   if has_capability vision-odometry; then
     timeout 100 /usr/local/bin/drn-vision-odometry-smoke
+  fi
+  if has_capability laser-scan; then
+    timeout 100 /usr/local/bin/drn-lidar-smoke
+    (
+      set +o pipefail
+      timeout 15 ros2 run tf2_ros tf2_echo base_link lidar_link 2>&1 |
+        grep -m1 -q "Translation"
+    )
   fi
   foxglove_listening
 }

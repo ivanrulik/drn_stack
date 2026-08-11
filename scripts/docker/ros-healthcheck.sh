@@ -19,6 +19,11 @@ if has_capability vision-odometry; then
   ros2 node list 2>/dev/null | grep -qx "/vision_odometry_bridge"
   ros2 node list 2>/dev/null | grep -qx "/vision_odometry_adapter"
 fi
+if has_capability laser-scan; then
+  ros2 node list 2>/dev/null | grep -qx "/lidar_bridge"
+  ros2 node list 2>/dev/null | grep -qx "/laser_scan_adapter"
+  ros2 node list 2>/dev/null | grep -qx "/lidar_world_markers"
+fi
 port_hex="$(printf '%04X' "${FOXGLOVE_PORT:-8765}")"
 awk -v port=":${port_hex}" '$2 ~ port && $4 == "0A" { found = 1 } END { exit !found }' \
   /proc/net/tcp /proc/net/tcp6

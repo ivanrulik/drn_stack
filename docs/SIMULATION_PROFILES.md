@@ -1,6 +1,6 @@
 # Simulation profiles
 
-DRN Stack ships three supported profiles on the current x500 airframe. The
+DRN Stack ships four supported profiles on the current x500 airframe. The
 profile contract itself is airframe-neutral: each directory declares its
 airframe, PX4 model, capabilities, and spawned Gazebo model name. New airframes
 can therefore reuse the lifecycle, safety, observation, and validation layers.
@@ -10,6 +10,7 @@ can therefore reuse the lifecycle, safety, observation, and validation layers.
 | `x500-basic` | `gz_x500` | None | Flight-control and project-SDK baseline |
 | `x500-depth` | `gz_x500_depth` | Color, metric depth, camera calibration | Perception, mapping, and avoidance development |
 | `x500-vio` | `gz_x500_vision` | Simulated vision odometry | Localization integration and odometry consumers |
+| `x500-lidar` | `gz_x500_lidar_2d` | 270-degree 2D laser scan | Mapping, obstacle sensing, and scan consumers |
 
 Profiles are small Compose overrides under `profiles/`; the base topology,
 network namespace, safety gates, and lifecycle behavior remain shared.
@@ -23,6 +24,7 @@ PowerShell:
 .\scripts\status.ps1 -Profile x500-depth
 .\scripts\restart.ps1 -Profile x500-depth
 .\scripts\run-sim.ps1 -Profile x500-vio
+.\scripts\run-sim.ps1 -Profile x500-lidar
 ```
 
 Bash, Git Bash, or WSL:
@@ -32,6 +34,7 @@ bash ./scripts/run-sim.sh --profile x500-depth
 bash ./scripts/status.sh --profile x500-depth
 bash ./scripts/restart.sh --profile x500-depth
 bash ./scripts/run-sim.sh --profile x500-vio
+bash ./scripts/run-sim.sh --profile x500-lidar
 ```
 
 Pass the profile again when restarting so Compose recreates the same model.
@@ -51,7 +54,7 @@ values on `ros-viz`:
 | `DRN_PROFILE_CAPABILITIES` | Comma-separated runtime capabilities |
 | `DRN_SIM_MODEL_NAME` | Spawned Gazebo model instance used to resolve topics |
 
-The currently supported capabilities are `depth-camera` and
+The currently supported capabilities are `depth-camera`, `laser-scan`, and
 `vision-odometry`. ROS launch behavior, health checks, and full smoke checks
 select functionality by capability instead of by airframe name. A profile that
 needs optional GPU rendering can provide matching `compose.gpu.yaml` and
@@ -64,15 +67,17 @@ operator gates.
 ## GPU acceleration
 
 The lifecycle scripts run an EGL renderer probe in the pinned PX4 image whenever
-`x500-depth` starts or restarts. They add the NVIDIA GPU override only when that
-probe initializes a hardware renderer and rejects Mesa software rasterizers
-such as llvmpipe. A successful `nvidia-smi` check alone is not enough because it
-can prove compute access without proving the OpenGL/EGL path Gazebo uses.
+`x500-depth` or `x500-lidar` starts or restarts. They add the NVIDIA GPU override
+only when that probe initializes a hardware renderer and rejects Mesa software
+rasterizers such as llvmpipe. A successful `nvidia-smi` check alone is not enough
+because it can prove compute access without proving the OpenGL/EGL path Gazebo
+uses.
 
-When no hardware renderer is available, the software override changes color
-from 1920 x 1080 at 30 Hz to 640 x 360 at 10 Hz and lowers depth from 30 to
-15 Hz while preserving its 640 x 480 resolution. Hardware rendering retains
-the upstream resolutions and 30 Hz rates.
+When no hardware renderer is available, the depth software override changes
+color from 1920 x 1080 at 30 Hz to 640 x 360 at 10 Hz and lowers depth from 30
+to 15 Hz while preserving its 640 x 480 resolution. The LiDAR software override
+preserves all 1,080 rays and lowers the scan rate from 30 to 10 Hz. Hardware
+rendering retains the upstream resolutions and 30 Hz rates.
 
 Set `DRN_GPU_MODE` to control that behavior:
 
@@ -98,7 +103,8 @@ acceleration applies to Gazebo rendering only; the ROS bridge remains in the
 ### Supported host policy
 
 - Windows with Docker Desktop uses the balanced software path when the EGL
-  probe fails. This is the supported and expected `x500-depth` behavior.
+  probe fails. This is the supported and expected behavior for render-backed
+  depth and LiDAR profiles.
 - Native Linux may use NVIDIA headless EGL when the same probe confirms a
   hardware renderer. No manual driver-library injection is required or
   supported.
@@ -160,6 +166,30 @@ not change EKF2 fusion parameters, disable GPS, inject a second external
 odometry publisher, or claim VIO-only position flight support. Those behaviors
 remain separately researched and operator-validated work.
 
+## x500-lidar ROS contract
+
+The pinned PX4 `gz_x500_lidar_2d` model carries a Hokuyo-style rendered scanner
+with 1,080 rays over 270 degrees and a 0.1 to 30 metre range. DRN bridges the
+Gazebo scan through an internal topic, replaces the generic upstream `link`
+frame label, and publishes this stable contract:
+
+| Topic | Type | Frame | Convention |
+| --- | --- | --- | --- |
+| `/drn/sensors/lidar/scan` | `sensor_msgs/msg/LaserScan` | `lidar_link` | x-forward, y-left, counter-clockwise angles |
+| `/drn/viz/lidar/walls` | `visualization_msgs/msg/MarkerArray` | `map` | Static visualization of the pinned `walls` world geometry |
+
+The static `base_link -> lidar_link` transform is at the simulated sensor
+origin. The profile deliberately does not republish the accompanying point
+cloud, enable PX4 collision prevention, or add avoidance behavior. Consumers
+that need a cloud can derive it from the scan without duplicating transport for
+all users.
+
+The profile selects PX4's pinned `walls` world by default so the stationary,
+disarmed vehicle receives finite returns that are immediately visible in
+Foxglove. Set `PX4_GZ_WORLD` before startup to deliberately select another
+world; the full profile smoke expects obstacle returns and therefore targets
+the default `walls` configuration.
+
 ## Foxglove
 
 Connect to `ws://localhost:8765` and import
@@ -172,6 +202,15 @@ For `x500-vio`, import
 [`foxglove/drn-simulation-x500-vio.json`](../foxglove/drn-simulation-x500-vio.json).
 It shows the stable ENU position stream, complete odometry message, vehicle
 status, and normal 3D view without adding flight controls.
+
+For `x500-lidar`, import
+[`foxglove/drn-simulation-x500-lidar.json`](../foxglove/drn-simulation-x500-lidar.json).
+It renders the scan in the 3D view and provides raw scan and vehicle-status
+inspection without adding flight controls. The default `walls` world produces
+magenta scan points around the stationary vehicle without requiring an armed
+flight or a separately spawned obstacle. Translucent blue markers reproduce the
+four pinned wall collision boxes so the returns have visible scene context;
+these markers are visualization only and do not create simulator geometry.
 
 ## Validation and resource expectations
 
@@ -196,3 +235,36 @@ with finite pose, twist, and covariance values; a normalized unit quaternion;
 the stable `map` and `base_link` frames; and a current PX4 status reporting
 disarmed. The upstream odometry publisher does not require camera rendering, so
 the profile does not use the depth profile's GPU overrides.
+
+For `x500-lidar`, the full smoke check requires three timestamp-distinct scans,
+the 1,080-ray angular and range contract, valid finite or positive-infinite
+ranges with finite obstacle returns, `base_link -> lidar_link` TF, and a current
+PX4 status reporting disarmed.
+
+### LiDAR resource gate
+
+The gate was measured before implementation on 2026-08-10 using the pinned
+images and Docker Desktop software rendering:
+
+- PX4 image: 6,286,756,280 bytes (5.85 GiB). The pinned image already contains
+  `x500_lidar_2d` and its sensor assets, so the profile adds no PX4 image layer.
+- Cached no-build startup to both services healthy: 12.6 seconds.
+- One post-start sample: `ros-viz` 135.1 MiB and `px4-sitl` 159.8 MiB; PX4/Gazebo
+  used 26.7% CPU at the instant sampled.
+- Recent complete Docker smoke runs before this profile took 22 to 28 minutes.
+  The LiDAR CI step records its own startup time, image bytes, and container
+  resource snapshot in the GitHub Actions job summary. Its startup remains
+  bounded by the existing 300-second profile readiness limit.
+
+The implemented profile was then measured on the same host and software path:
+
+- PX4 remained 6,286,756,280 bytes; the ROS image was 1,073,727,590 bytes, an
+  increase of 652,628 bytes over the pre-profile ROS image.
+- A cached normal lifecycle run, including the EGL probe, health wait, and full
+  inert smoke check, completed in 45 seconds.
+- One scan-active sample used 214 MiB for `ros-viz` and 588.2 MiB for
+  `px4-sitl`; instantaneous CPU was 8.56% and 260.80%, respectively.
+
+These are routing measurements, not cross-host performance guarantees. Compare
+future measurements on the same host and rendering mode; actual rates and CPU
+load depend on subscribers and scene complexity.
