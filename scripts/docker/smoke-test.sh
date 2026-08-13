@@ -74,15 +74,18 @@ full_smoke() {
   timeout 60 ros2 topic echo \
     --qos-reliability best_effort \
     --qos-durability volatile \
-    --once /fmu/out/vehicle_odometry >/dev/null
+    --once /fmu/out/vehicle_odometry \
+    px4_msgs/msg/VehicleOdometry >/dev/null
   timeout 30 ros2 topic echo \
     --qos-reliability reliable \
     --qos-durability transient_local \
-    --once /robot_description >/dev/null
+    --once /robot_description \
+    std_msgs/msg/String >/dev/null
   control_status="$(timeout 30 ros2 topic echo \
     --qos-reliability reliable \
     --qos-durability transient_local \
-    --once /drn/control/status)"
+    --once /drn/control/status \
+    std_msgs/msg/String)"
   grep -Eq '^data: (inactive|ready_armed|ready_disarmed)$' <<<"${control_status}"
   (
     set +o pipefail
