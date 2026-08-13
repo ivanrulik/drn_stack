@@ -22,6 +22,8 @@ Project documentation:
   capture, integrity metadata, retention, and replay.
 - [`docs/SIMULATION_PROFILES.md`](docs/SIMULATION_PROFILES.md): airframe-neutral
   profile contract, supported configurations, sensor topics, and validation.
+- [`docs/HARDWARE_UDP.md`](docs/HARDWARE_UDP.md): inert, read-only PX4 hardware
+  acceptance over a trusted UDP bench link.
 
 Community and project policies:
 
@@ -123,6 +125,28 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Replay an evidence pack | `.\scripts\replay.ps1 artifacts\<run-id>` | `bash ./scripts/replay.sh artifacts/<run-id>` |
 
 Normal stop and redeploy operations do not delete Docker images or build caches. Cleanup is deliberately explicit and affects only the `drn-stack` Compose project.
+
+## PX4 hardware bench scaffold
+
+The explicit `hardware-udp` connection profile starts the ROS/XRCE companion
+side without PX4 SITL, Gazebo, `drn_control`, or downstream projects. It accepts
+only the pinned PX4 v1.17.0 identity, requires live version-matched telemetry
+that remains disarmed, and writes a JSON acceptance report.
+
+After completing the propeller-free board and trusted-interface prerequisites
+in [`docs/HARDWARE_UDP.md`](docs/HARDWARE_UDP.md), run:
+
+```powershell
+.\scripts\run-hardware.ps1 -BindAddress 10.41.10.1
+```
+
+```bash
+bash ./scripts/run-hardware.sh --bind-address 10.41.10.1
+```
+
+Hardware mode is never selected by the simulation scripts. Serial transport
+and any operator-controlled flight activity remain out of scope for this
+profile.
 
 ## Project extensions
 

@@ -57,6 +57,8 @@ FROM ros:humble-ros-base-jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ROS_GZ_HARMONIC_VERSION=0.244.12-3jammy
+ARG PYMAVLINK_VERSION=2.4.49
+ARG FASTCRC_VERSION=0.3.6
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -68,6 +70,7 @@ RUN apt-get update \
         libtinyxml2-9 \
         netcat-openbsd \
         procps \
+        python3-pip \
         python3-yaml \
         ros-humble-eigen3-cmake-module \
         ros-humble-foxglove-bridge \
@@ -82,6 +85,9 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         ros-humble-ros-gzharmonic-bridge="${ROS_GZ_HARMONIC_VERSION}" \
+    && python3 -m pip install --no-cache-dir \
+        "fastcrc==${FASTCRC_VERSION}" \
+        "pymavlink==${PYMAVLINK_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/ /usr/local/
@@ -91,6 +97,7 @@ COPY scripts/docker/evidence.py /usr/local/bin/drn-evidence
 COPY scripts/docker/ros-environment.sh /usr/local/bin/drn-ros-environment
 COPY scripts/docker/ros-entrypoint.sh /usr/local/bin/drn-ros-entrypoint
 COPY scripts/docker/ros-healthcheck.sh /usr/local/bin/drn-ros-healthcheck
+COPY scripts/docker/hardware-smoke.py /usr/local/bin/drn-hardware-smoke
 COPY scripts/docker/lidar-smoke.py /usr/local/bin/drn-lidar-smoke
 COPY scripts/docker/sensor-smoke.py /usr/local/bin/drn-sensor-smoke
 COPY scripts/docker/vision-odometry-smoke.py /usr/local/bin/drn-vision-odometry-smoke
@@ -99,12 +106,14 @@ COPY scripts/docker/smoke-test.sh /usr/local/bin/drn-smoke-test
 RUN sed -i 's/\r$//' \
         /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
+        /usr/local/bin/drn-hardware-smoke \
         /usr/local/bin/drn-lidar-smoke \
         /usr/local/bin/drn-sensor-smoke \
         /usr/local/bin/drn-vision-odometry-smoke \
     && chmod 0755 \
         /usr/local/bin/drn-evidence \
         /usr/local/bin/drn-project \
+        /usr/local/bin/drn-hardware-smoke \
         /usr/local/bin/drn-ros-environment \
         /usr/local/bin/drn-ros-entrypoint \
         /usr/local/bin/drn-ros-healthcheck \

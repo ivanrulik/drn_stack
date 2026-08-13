@@ -25,6 +25,8 @@ mapfile -t project_yaml_files < <(find projects -type f \( -name '*.yaml' -o -na
 yaml_files+=("${project_yaml_files[@]}")
 mapfile -t profile_yaml_files < <(find profiles -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
 yaml_files+=("${profile_yaml_files[@]}")
+mapfile -t connection_yaml_files < <(find connections -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort)
+yaml_files+=("${connection_yaml_files[@]}")
 yaml_files+=(compose.yaml compose.evidence.yaml .yamllint.yml)
 yamllint --strict "${yaml_files[@]}"
 
@@ -52,6 +54,14 @@ for gpu_file in profiles/*/compose.gpu.yaml; do
       config --quiet
   done
 done
+DRN_HARDWARE_BIND_ADDRESS=192.0.2.10 \
+DRN_HARDWARE_ARTIFACTS=/tmp/drn-hardware \
+docker compose \
+  --project-name drn-stack \
+  --file compose.yaml \
+  --file profiles/x500-basic/compose.yaml \
+  --file connections/hardware-udp/compose.yaml \
+  config --quiet
 DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
   --project-name drn-stack \
   --file compose.yaml \
@@ -61,6 +71,7 @@ DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
 python3 -m compileall -q \
   src/drn_viz/launch \
   scripts/docker/evidence.py \
+  scripts/docker/hardware-smoke.py \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
   scripts/docker/lidar-smoke.py \
@@ -102,6 +113,7 @@ required_files = (
     Path("docs/RELEASE_POLICY.md"),
     Path("docs/PROJECT_SDK.md"),
     Path("docs/EVIDENCE_PACKS.md"),
+    Path("docs/HARDWARE_UDP.md"),
     Path("src/drn_viz/meshes/LICENSE"),
 )
 for path in required_files:
@@ -150,6 +162,8 @@ expected_refs = {
     "PX4_ROS2_INTERFACE_REF": "4a3370f084ac6f1ef001a4afa2b007845ffd0837",
     "MICRO_XRCE_DDS_AGENT_REF": "73622810d984349b80bbac0ef55fc0b694d62222",
     "ROS_GZ_HARMONIC_VERSION": "0.244.12-3jammy",
+    "PYMAVLINK_VERSION": "2.4.49",
+    "FASTCRC_VERSION": "0.3.6",
 }
 compose = Path("compose.yaml").read_text(encoding="utf-8")
 compatibility = Path("docs/COMPATIBILITY.md").read_text(encoding="utf-8")

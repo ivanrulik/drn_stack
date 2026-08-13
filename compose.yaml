@@ -18,6 +18,8 @@ services:
         PX4_ROS2_INTERFACE_REF: 4a3370f084ac6f1ef001a4afa2b007845ffd0837
         MICRO_XRCE_DDS_AGENT_REF: 73622810d984349b80bbac0ef55fc0b694d62222
         ROS_GZ_HARMONIC_VERSION: 0.244.12-3jammy
+        PYMAVLINK_VERSION: 2.4.49
+        FASTCRC_VERSION: 0.3.6
     init: true
     environment:
       ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
@@ -29,6 +31,7 @@ services:
       DRN_PROFILE_CAPABILITIES: ""
       DRN_SIM_MODEL_NAME: "x500_0"
       PX4_GZ_WORLD: "${PX4_GZ_WORLD:-default}"
+      DRN_CONNECTION_MODE: sitl
     ports:
       - "${FOXGLOVE_HOST:-127.0.0.1}:${FOXGLOVE_PORT:-8765}:${FOXGLOVE_PORT:-8765}/tcp"
     healthcheck:

@@ -20,6 +20,8 @@ authorize mixing other branches, tags, or message definitions.
 | Gazebo | Harmonic packages selected by the pinned PX4 setup | PX4 image build |
 | ROS-Gazebo bridge | Harmonic 0.244.12 (`ROS_GZ_HARMONIC_VERSION: 0.244.12-3jammy`) | OSRF Ubuntu stable repository |
 | Foxglove Bridge | ROS Humble package resolved at image build time | ROS image build |
+| pymavlink | 2.4.49 | `PYMAVLINK_VERSION` in `compose.yaml` |
+| fastcrc | 0.3.6 | `FASTCRC_VERSION` in `compose.yaml` |
 
 Git-based dependencies are pinned to immutable commits. The ROS base image and
 APT packages are distribution-pinned but not digest-pinned, so rebuilding on a
@@ -44,6 +46,10 @@ images.
   mode-registration, executor, watchdog, and failsafe compatibility.
 - Hardware profiles must fail closed when firmware identity, transport, or
   message compatibility cannot be confirmed.
+- The `hardware-udp` profile accepts only PX4 v1.17.0 with git identity prefix
+  retained git identity `a5eb12d2ab`, exact `px4_msgs` topic types, and a
+  continuously disarmed vehicle.
+  Other firmware builds require a deliberate baseline-update branch.
 
 ## Validation for baseline changes
 
