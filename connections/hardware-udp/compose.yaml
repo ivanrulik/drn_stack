@@ -1,0 +1,26 @@
+services:
+  ros-viz:
+    environment:
+      DRN_CONNECTION_MODE: hardware-udp
+      DRN_EXPECTED_PX4_VERSION: "1.17.0"
+      DRN_EXPECTED_PX4_GIT_HASH: a5eb12d2ab
+      DRN_GIT_REVISION: "${DRN_GIT_REVISION:-unknown}"
+      DRN_GIT_DIRTY: "${DRN_GIT_DIRTY:-unknown}"
+      DRN_IMAGE_ID: "${DRN_IMAGE_ID:-unknown}"
+      MAVLINK_PORT: "${DRN_HARDWARE_MAVLINK_PORT:-14580}"
+    ports:
+      - target: 8888
+        published: "${XRCE_PORT:-8888}"
+        host_ip: "${DRN_HARDWARE_BIND_ADDRESS:?explicit trusted IPv4 required}"
+        protocol: udp
+      - target: "${DRN_HARDWARE_MAVLINK_PORT:-14580}"
+        published: "${DRN_HARDWARE_MAVLINK_PORT:-14580}"
+        host_ip: "${DRN_HARDWARE_BIND_ADDRESS:?explicit trusted IPv4 required}"
+        protocol: udp
+    volumes:
+      - type: bind
+        source: "${DRN_HARDWARE_ARTIFACTS:-./artifacts/hardware}"
+        target: /artifacts/hardware
+
+  px4-sitl:
+    profiles: [sitl-only]

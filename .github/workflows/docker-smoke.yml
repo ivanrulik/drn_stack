@@ -37,6 +37,12 @@ jobs:
                 -f "${renderer_file}" config --quiet
             done
           done
+          DRN_HARDWARE_BIND_ADDRESS=192.0.2.10 \
+          DRN_HARDWARE_ARTIFACTS=/tmp/drn-hardware \
+            docker compose --project-name drn-stack \
+              -f compose.yaml \
+              -f profiles/x500-basic/compose.yaml \
+              -f connections/hardware-udp/compose.yaml config --quiet
 
       - name: Build pinned images
         run: |

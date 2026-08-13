@@ -28,22 +28,33 @@ trap shutdown TERM INT EXIT
 MicroXRCEAgent udp4 -p "${XRCE_PORT:-8888}" &
 agent_pid=$!
 
-launch_args=(
-  "odometry_topic:=${ODOMETRY_TOPIC:-/fmu/out/vehicle_odometry}"
-  "foxglove_port:=${FOXGLOVE_PORT:-8765}"
-  "profile:=${DRN_PROFILE:-x500-basic}"
-  "airframe:=${DRN_AIRFRAME:-x500}"
-  "model_name:=${DRN_SIM_MODEL_NAME:-x500_0}"
-  "world_name:=${PX4_GZ_WORLD:-default}"
-)
-if [[ -n "${DRN_PROFILE_CAPABILITIES:-}" ]]; then
-  launch_args+=("capabilities:=${DRN_PROFILE_CAPABILITIES}")
+if [[ "${DRN_CONNECTION_MODE:-sitl}" == "hardware-udp" ]]; then
+  if [[ -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
+    echo "Downstream project launch is disabled in hardware-udp mode." >&2
+    exit 2
+  fi
+  launch_args=(
+    "odometry_topic:=${ODOMETRY_TOPIC:-/fmu/out/vehicle_odometry}"
+    "foxglove_port:=${FOXGLOVE_PORT:-8765}"
+  )
+  ros2 launch drn_viz hardware.launch.py "${launch_args[@]}" &
+else
+  launch_args=(
+    "odometry_topic:=${ODOMETRY_TOPIC:-/fmu/out/vehicle_odometry}"
+    "foxglove_port:=${FOXGLOVE_PORT:-8765}"
+    "profile:=${DRN_PROFILE:-x500-basic}"
+    "airframe:=${DRN_AIRFRAME:-x500}"
+    "model_name:=${DRN_SIM_MODEL_NAME:-x500_0}"
+    "world_name:=${PX4_GZ_WORLD:-default}"
+  )
+  if [[ -n "${DRN_PROFILE_CAPABILITIES:-}" ]]; then
+    launch_args+=("capabilities:=${DRN_PROFILE_CAPABILITIES}")
+  fi
+  ros2 launch drn_viz visualize.launch.py "${launch_args[@]}" &
 fi
-
-ros2 launch drn_viz visualize.launch.py "${launch_args[@]}" &
 ros_pid=$!
 
-if [[ -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
+if [[ "${DRN_CONNECTION_MODE:-sitl}" == "sitl" && -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
   /usr/local/bin/drn-project launch "${DRN_PROJECT_MANIFEST}" &
   project_pid=$!
 fi

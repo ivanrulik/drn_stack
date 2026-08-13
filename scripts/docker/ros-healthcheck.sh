@@ -12,6 +12,11 @@ has_capability() {
 pgrep -x MicroXRCEAgent >/dev/null
 ros2 node list 2>/dev/null | grep -qx "/foxglove_bridge"
 ros2 node list 2>/dev/null | grep -qx "/odometry_tf_bridge"
+if [[ "${DRN_CONNECTION_MODE:-sitl}" == "hardware-udp" ]]; then
+  if ros2 node list 2>/dev/null | grep -qx "/drn_control"; then
+    exit 1
+  fi
+fi
 if has_capability depth-camera; then
   ros2 node list 2>/dev/null | grep -qx "/depth_camera_bridge"
 fi

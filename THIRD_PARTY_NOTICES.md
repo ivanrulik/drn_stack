@@ -4,6 +4,16 @@ DRN Stack is licensed under the MIT License except for the third-party
 materials identified below. Dependencies downloaded while building the
 containers remain under their respective upstream licenses.
 
+## pymavlink
+
+The ROS image installs `pymavlink` 2.4.49 from PyPI for read-only MAVLink
+identity and parameter inspection in the hardware acceptance rig. pymavlink is
+distributed under the GNU Lesser General Public License v3 or later; generated
+MAVLink source is available under the MIT License. See the
+[`pymavlink` project page](https://pypi.org/project/pymavlink/2.4.49/).
+Its pinned `fastcrc` 0.3.6 dependency is distributed under the MIT License;
+see the [`fastcrc` project page](https://pypi.org/project/fastcrc/0.3.6/).
+
 ## PX4 x500 model assets
 
 The following files under `src/drn_viz/meshes/` come from the

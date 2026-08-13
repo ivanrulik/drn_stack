@@ -130,13 +130,17 @@ names. Avoid copying complete Compose files for every model.
 Reduce the gap between a ROS 2 application validated in simulation and the same
 application running against PX4 flight-controller hardware.
 
-### Proposed scope
+### Delivered first slice and remaining scope
 
-- Explicit `sitl`, `hardware-udp`, and `hardware-serial` connection profiles.
-- Serial-device discovery and Docker device passthrough where supported.
-- Firmware identity and message-version compatibility checks.
-- Parameter snapshot and communication health report.
-- A no-arm bench smoke test with clear physical safety prerequisites.
+- [x] Keep `sitl` as the default and add an explicit `hardware-udp` connection
+  profile that starts only the read-only ROS companion service.
+- [x] Add firmware identity, message-version, parameter, communication-health,
+  and continuously-disarmed checks with a durable JSON report.
+- [x] Document a propeller-free no-arm bench procedure and keep all real-device
+  configuration outside the DRN verifier.
+- [ ] Qualify the UDP profile on physical PX4 v1.17.0 hardware.
+- [ ] Add `hardware-serial` with platform-specific device discovery and Docker
+  passthrough only after the UDP acceptance path is proven.
 - Documentation for handing deeper board qualification to PX4's upstream bench
   tooling instead of duplicating it.
 
@@ -203,7 +207,11 @@ Status: complete.
 
 ### Phase 4: Hardware parity
 
-- Add explicit UDP and serial companion profiles and no-arm bench validation.
+Status: in progress.
+
+- [x] Add the explicit UDP companion scaffold and automated no-arm acceptance.
+- [ ] Complete operator-run physical UDP bench qualification.
+- [ ] Add and qualify the explicit serial companion profile.
 
 ### Phase 5: Multi-vehicle
 
