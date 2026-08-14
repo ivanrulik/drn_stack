@@ -52,4 +52,56 @@ if [[ "${DRN_GPU_ACCELERATION:-software}" == "nvidia" ]]; then
   /usr/local/bin/drn-gpu-renderer-check
 fi
 
+if [[ "${DRN_FLEET_SIZE:-1}" == "2" ]]; then
+  px4_binary="/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4"
+  fleet_pids=()
+
+  # shellcheck disable=SC2317 # Invoked indirectly by trap.
+  shutdown_fleet() {
+    trap - TERM INT EXIT
+    for pid in "${fleet_pids[@]}"; do
+      if kill -0 "${pid}" 2>/dev/null; then
+        kill -TERM "${pid}" 2>/dev/null || true
+      fi
+    done
+    pkill -TERM -f 'gz sim' 2>/dev/null || true
+    for pid in "${fleet_pids[@]}"; do
+      wait "${pid}" 2>/dev/null || true
+    done
+  }
+  trap shutdown_fleet TERM INT EXIT
+
+  PX4_SYS_AUTOSTART=4001 \
+  PX4_UXRCE_DDS_NS=px4_1 \
+  PX4_GZ_MODEL_POSE="0,0" \
+  GZ_IP=127.0.0.1 \
+    "${px4_binary}" -i 1 &
+  fleet_pids+=("$!")
+
+  # The first PX4 instance owns gz-server. Wait for its create service before
+  # attaching the second instance to avoid a duplicate-server startup race.
+  # shellcheck disable=SC2016 # Expanded by the exported child environment.
+  timeout 60 bash -c \
+    'until gz service -l 2>/dev/null | grep -Fx "/world/${PX4_GZ_WORLD}/create" >/dev/null; do sleep 1; done'
+
+  PX4_SYS_AUTOSTART=4001 \
+  PX4_UXRCE_DDS_NS=px4_2 \
+  PX4_GZ_STANDALONE=1 \
+  PX4_GZ_MODEL_POSE="0,2" \
+  GZ_IP=127.0.0.1 \
+    "${px4_binary}" -i 2 &
+  fleet_pids+=("$!")
+
+  set +e
+  wait -n "${fleet_pids[@]}"
+  status=$?
+  set -e
+  exit "${status}"
+fi
+
+if [[ "${DRN_FLEET_SIZE:-1}" != "1" ]]; then
+  echo "DRN_FLEET_SIZE must be 1 or the supported bounded value 2." >&2
+  exit 2
+fi
+
 exec make px4_sitl "${PX4_SIM_MODEL}"

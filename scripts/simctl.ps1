@@ -268,6 +268,9 @@ function Show-Summary {
     if (Test-Path -LiteralPath (Join-Path $ProfileDirectory 'compose.gpu.yaml')) {
         Write-Host "Rendering: $GpuAcceleration"
     }
+    if ($Profile -eq 'x500-multi') {
+        Write-Host 'Fleet: px4_1 and px4_2 (observation only; control disabled)'
+    }
     Write-Host "Foxglove: ws://localhost:$FoxglovePort"
     $LayoutPath = Join-Path $RepoRoot "foxglove\drn-simulation-$Profile.json"
     if (Test-Path -LiteralPath $LayoutPath -PathType Leaf) {

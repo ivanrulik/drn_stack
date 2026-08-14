@@ -1,6 +1,6 @@
 # Simulation profiles
 
-DRN Stack ships four supported profiles on the current x500 airframe. The
+DRN Stack ships five supported profiles on the current x500 airframe. The
 profile contract itself is airframe-neutral: each directory declares its
 airframe, PX4 model, capabilities, and spawned Gazebo model name. New airframes
 can therefore reuse the lifecycle, safety, observation, and validation layers.
@@ -11,6 +11,7 @@ can therefore reuse the lifecycle, safety, observation, and validation layers.
 | `x500-depth` | `gz_x500_depth` | Color, metric depth, camera calibration | Perception, mapping, and avoidance development |
 | `x500-vio` | `gz_x500_vision` | Simulated vision odometry | Localization integration and odometry consumers |
 | `x500-lidar` | `gz_x500_lidar_2d` | 270-degree 2D laser scan | Mapping, obstacle sensing, and scan consumers |
+| `x500-multi` | Two `gz_x500` instances | Namespaced PX4 telemetry | Fleet namespace, routing, TF, and observation tests |
 
 Profiles are small Compose overrides under `profiles/`; the base topology,
 network namespace, safety gates, and lifecycle behavior remain shared.
@@ -25,6 +26,7 @@ PowerShell:
 .\scripts\restart.ps1 -Profile x500-depth
 .\scripts\run-sim.ps1 -Profile x500-vio
 .\scripts\run-sim.ps1 -Profile x500-lidar
+.\scripts\run-sim.ps1 -Profile x500-multi
 ```
 
 Bash, Git Bash, or WSL:
@@ -35,6 +37,7 @@ bash ./scripts/status.sh --profile x500-depth
 bash ./scripts/restart.sh --profile x500-depth
 bash ./scripts/run-sim.sh --profile x500-vio
 bash ./scripts/run-sim.sh --profile x500-lidar
+bash ./scripts/run-sim.sh --profile x500-multi
 ```
 
 Pass the profile again when restarting so Compose recreates the same model.
@@ -54,8 +57,9 @@ values on `ros-viz`:
 | `DRN_PROFILE_CAPABILITIES` | Comma-separated runtime capabilities |
 | `DRN_SIM_MODEL_NAME` | Spawned Gazebo model instance used to resolve topics |
 
-The currently supported capabilities are `depth-camera`, `laser-scan`, and
-`vision-odometry`. ROS launch behavior, health checks, and full smoke checks
+The currently supported capabilities are `depth-camera`, `laser-scan`,
+`multi-vehicle`, and `vision-odometry`. ROS launch behavior, health checks, and
+full smoke checks
 select functionality by capability instead of by airframe name. A profile that
 needs optional GPU rendering can provide matching `compose.gpu.yaml` and
 `compose.software.yaml` files; the lifecycle scripts discover those files too.
@@ -212,6 +216,33 @@ flight or a separately spawned obstacle. Translucent blue markers reproduce the
 four pinned wall collision boxes so the returns have visible scene context;
 these markers are visualization only and do not create simulator geometry.
 
+For `x500-multi`, import
+[`foxglove/drn-simulation-x500-multi.json`](../foxglove/drn-simulation-x500-multi.json).
+It shows both x500 models under `map`, separate NED position plots, and raw
+status inspection. Its Foxglove publication and service allowlists match
+nothing, so the layout is observation-only.
+
+## x500-multi fleet contract
+
+The first fleet slice is deliberately fixed at two plain x500 instances. It
+shares one Gazebo server, one ROS service, and one Micro XRCE-DDS Agent while
+assigning PX4 instances `1` and `2` unique DDS keys, MAVLink system IDs, model
+names, spawn poses, and ROS namespaces:
+
+| Vehicle | Spawn pose | ROS namespace | TF chain |
+| --- | --- | --- | --- |
+| `x500_1` | `(0, 0)` | `/px4_1` | `map -> px4_1/map -> px4_1/base_link` |
+| `x500_2` | `(0, 2)` | `/px4_2` | `map -> px4_2/map -> px4_2/base_link` |
+
+The full smoke check requires three fresh odometry and status samples from
+both namespaces, both vehicles continuously disarmed, both TF chains, no
+unnamespaced `/fmu/*` topics, and no `/drn_control` or `/drn/control/*`
+endpoints. Downstream-project launch is disabled in this profile.
+
+This slice does not support fleet control, Teleop, arming, takeoff, mixed
+airframes, sensor profiles, or hardware. The two-vehicle limit is intentional;
+raise it only after recording a new startup, CPU, memory, and timing baseline.
+
 ## Validation and resource expectations
 
 The normal full smoke check remains inert. For `x500-depth` it additionally
@@ -268,3 +299,25 @@ The implemented profile was then measured on the same host and software path:
 These are routing measurements, not cross-host performance guarantees. Compare
 future measurements on the same host and rendering mode; actual rates and CPU
 load depend on subscribers and scene complexity.
+
+### Two-vehicle resource gate
+
+The fixed `x500-multi` slice was measured on 2026-08-13 using the pinned images
+and Docker Desktop software rendering on the same 32 GB Windows host:
+
+- A cached PowerShell lifecycle run, including image checks, startup, health
+  waits, and the full inert fleet smoke test, completed in 40.1 seconds.
+- Three sustained post-start samples used 152.3 to 153.1 MiB for `ros-viz` and
+  166.4 to 166.6 MiB for `px4-sitl`, or about 319 MiB combined.
+- Instantaneous CPU was 6.23% to 7.49% for `ros-viz` and 265.47% to 266.66% for
+  the container holding both PX4 instances and Gazebo. Docker percentages can
+  exceed 100% because work spans multiple logical CPU cores.
+- Five Gazebo samples reported a real-time factor from 0.9996 to 1.0000 while
+  both independently identified PX4 instances remained connected and disarmed.
+
+For comparison, a same-host `x500-basic` lifecycle completed in 29 seconds and
+one post-start sample used about 388 MiB combined at roughly 164% combined CPU.
+The fleet container uses direct PX4 instance launches instead of retaining the
+single-profile build wrapper processes, so its lower sampled memory is not a
+claim that two vehicles inherently require less memory. These are routing
+measurements, not cross-host performance guarantees.

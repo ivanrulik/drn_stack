@@ -8,6 +8,7 @@ agent_pid=""
 ros_pid=""
 project_pid=""
 
+# shellcheck disable=SC2317 # Invoked indirectly by trap.
 shutdown() {
   trap - TERM INT EXIT
   if [[ -n "${ros_pid}" ]] && kill -0 "${ros_pid}" 2>/dev/null; then
@@ -38,6 +39,13 @@ if [[ "${DRN_CONNECTION_MODE:-sitl}" == "hardware-udp" ]]; then
     "foxglove_port:=${FOXGLOVE_PORT:-8765}"
   )
   ros2 launch drn_viz hardware.launch.py "${launch_args[@]}" &
+elif [[ ",${DRN_PROFILE_CAPABILITIES:-}," == *",multi-vehicle,"* ]]; then
+  if [[ -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
+    echo "Downstream project launch is disabled in multi-vehicle mode." >&2
+    exit 2
+  fi
+  ros2 launch drn_viz fleet.launch.py \
+    "foxglove_port:=${FOXGLOVE_PORT:-8765}" &
 else
   launch_args=(
     "odometry_topic:=${ODOMETRY_TOPIC:-/fmu/out/vehicle_odometry}"
@@ -54,7 +62,9 @@ else
 fi
 ros_pid=$!
 
-if [[ "${DRN_CONNECTION_MODE:-sitl}" == "sitl" && -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
+if [[ "${DRN_CONNECTION_MODE:-sitl}" == "sitl" ]] &&
+  [[ ",${DRN_PROFILE_CAPABILITIES:-}," != *",multi-vehicle,"* ]] &&
+  [[ -n "${DRN_PROJECT_MANIFEST:-}" ]]; then
   /usr/local/bin/drn-project launch "${DRN_PROJECT_MANIFEST}" &
   project_pid=$!
 fi

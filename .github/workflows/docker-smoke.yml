@@ -158,6 +158,43 @@ jobs:
             -f profiles/x500-lidar/compose.software.yaml \
             down --remove-orphans --volumes --timeout 30
 
+      - name: Start x500-multi profile and record resource baseline
+        run: |
+          started_at="$(date +%s)"
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            up -d --no-build --wait --wait-timeout 300
+          startup_seconds="$(($(date +%s) - started_at))"
+          {
+            echo '### x500-multi resource baseline'
+            echo
+            echo "- Startup to healthy: ${startup_seconds} seconds"
+            echo
+            echo '| Container | CPU | Memory | PIDs |'
+            echo '| --- | ---: | ---: | ---: |'
+            docker stats --no-stream \
+              --format '| {{.Name}} | {{.CPUPerc}} | {{.MemUsage}} | {{.PIDs}} |' \
+              drn-stack-ros-viz-1 drn-stack-px4-sitl-1
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+          test "${startup_seconds}" -le 300
+
+      - name: Verify fleet namespaces, TF, telemetry, and inert state
+        run: bash scripts/simctl.sh smoke --profile x500-multi
+
+      - name: Capture x500-multi logs on failure
+        if: failure()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            logs --no-color --tail=500
+
+      - name: Stop x500-multi profile
+        if: always()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            down --remove-orphans --volumes --timeout 30
+
       - name: Run inert downstream-project scenario
         env:
           DRN_EVIDENCE: "1"

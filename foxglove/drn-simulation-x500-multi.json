@@ -1,0 +1,118 @@
+{
+  "configById": {
+    "3D!fleet": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 10,
+        "phi": 45,
+        "thetaOffset": 135,
+        "targetOffset": [0, 1, 0],
+        "target": [0, 1, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "ignoreColladaUpAxis": true,
+        "transforms": {"showLabel": true, "axisScale": 0.5}
+      },
+      "transforms": {
+        "frame:map": {"visible": true},
+        "frame:px4_1/base_link": {"visible": true},
+        "frame:px4_2/base_link": {"visible": true}
+      },
+      "topics": {
+        "/px4_1/robot_description": {"visible": true},
+        "/px4_2/robot_description": {"visible": true}
+      },
+      "layers": {
+        "fleet-map-grid": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Fleet map grid",
+          "instanceId": "fleet-map-grid",
+          "layerId": "foxglove.Grid",
+          "frameId": "map",
+          "size": 20,
+          "divisions": 20,
+          "lineWidth": 1,
+          "color": "#6b7280",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1
+        }
+      },
+      "imageMode": {},
+      "foxglovePanelTitle": "Two x500 Fleet (Observation Only)"
+    },
+    "Plot!px4_1": {
+      "title": "px4_1 Position (NED)",
+      "paths": [
+        {"value": "/px4_1/fmu/out/vehicle_odometry.position[0]", "enabled": true, "timestampMethod": "receiveTime", "label": "North"},
+        {"value": "/px4_1/fmu/out/vehicle_odometry.position[1]", "enabled": true, "timestampMethod": "receiveTime", "label": "East"},
+        {"value": "/px4_1/fmu/out/vehicle_odometry.position[2]", "enabled": true, "timestampMethod": "receiveTime", "label": "Down"}
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 220,
+      "foxglovePanelTitle": "px4_1 Position"
+    },
+    "Plot!px4_2": {
+      "title": "px4_2 Position (NED)",
+      "paths": [
+        {"value": "/px4_2/fmu/out/vehicle_odometry.position[0]", "enabled": true, "timestampMethod": "receiveTime", "label": "North"},
+        {"value": "/px4_2/fmu/out/vehicle_odometry.position[1]", "enabled": true, "timestampMethod": "receiveTime", "label": "East"},
+        {"value": "/px4_2/fmu/out/vehicle_odometry.position[2]", "enabled": true, "timestampMethod": "receiveTime", "label": "Down"}
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 220,
+      "foxglovePanelTitle": "px4_2 Position"
+    },
+    "RawMessages!px4_1": {
+      "topicPath": "/px4_1/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 13,
+      "foxglovePanelTitle": "px4_1 Status"
+    },
+    "RawMessages!px4_2": {
+      "topicPath": "/px4_2/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 13,
+      "foxglovePanelTitle": "px4_2 Status"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime",
+    "timeDisplayMethod": "ROS"
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!fleet",
+    "second": {
+      "direction": "column",
+      "first": {"direction": "row", "first": "Plot!px4_1", "second": "Plot!px4_2", "splitPercentage": 50},
+      "second": {"direction": "row", "first": "RawMessages!px4_1", "second": "RawMessages!px4_2", "splitPercentage": 50},
+      "splitPercentage": 55
+    },
+    "splitPercentage": 55
+  }
+}

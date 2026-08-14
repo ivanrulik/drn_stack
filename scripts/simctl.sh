@@ -173,6 +173,9 @@ print_summary() {
   if [[ -f "${profile_dir}/compose.gpu.yaml" ]]; then
     echo "Rendering: ${gpu_acceleration}"
   fi
+  if [[ "${profile}" == "x500-multi" ]]; then
+    echo "Fleet: px4_1 and px4_2 (observation only; control disabled)"
+  fi
   echo "Foxglove: ws://localhost:${FOXGLOVE_PORT:-8765}"
   if [[ -f "${layout_path}" ]]; then
     echo "Foxglove layout: foxglove/drn-simulation-${profile}.json"
