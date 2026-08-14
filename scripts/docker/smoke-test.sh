@@ -26,6 +26,22 @@ quick_smoke() {
   services="$(ros2 service list)"
 
   grep -Fx /foxglove_bridge <<<"${nodes}" >/dev/null
+  if has_capability multi-vehicle; then
+    for vehicle in px4_1 px4_2; do
+      grep -Fx "/${vehicle}/odometry_tf_bridge" <<<"${nodes}" >/dev/null
+      grep -Fx "/${vehicle}/robot_state_publisher" <<<"${nodes}" >/dev/null
+      grep -Fx "/${vehicle}/fmu/out/vehicle_odometry" <<<"${topics}" >/dev/null
+      grep -Fx "/${vehicle}/fmu/out/vehicle_status_v1" <<<"${topics}" >/dev/null
+    done
+    if grep -Fx /drn_control <<<"${nodes}" >/dev/null ||
+      grep -E '^/drn/control/' <<<"${topics}" >/dev/null ||
+      grep -E '^/drn/control/' <<<"${services}" >/dev/null ||
+      grep -E '^/fmu/' <<<"${topics}" >/dev/null; then
+      return 1
+    fi
+    foxglove_listening
+    return
+  fi
   grep -Fx /odometry_tf_bridge <<<"${nodes}" >/dev/null
   grep -Fx /drn_control <<<"${nodes}" >/dev/null
   grep -Fx /fmu/out/vehicle_odometry <<<"${topics}" >/dev/null
@@ -61,6 +77,19 @@ quick_smoke() {
 
 full_smoke() {
   local control_status
+
+  if has_capability multi-vehicle; then
+    timeout 120 /usr/local/bin/drn-fleet-smoke
+    for vehicle in px4_1 px4_2; do
+      (
+        set +o pipefail
+        timeout 20 ros2 run tf2_ros tf2_echo map "${vehicle}/base_link" 2>&1 |
+          grep -m1 -q "Translation"
+      )
+    done
+    foxglove_listening
+    return
+  fi
 
   # shellcheck disable=SC2016  # Expand inside the child bash process.
   timeout 180 bash -c \

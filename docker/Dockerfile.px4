@@ -48,10 +48,12 @@ RUN apt-get update \
 
 COPY scripts/docker/px4-entrypoint.sh /usr/local/bin/drn-px4-entrypoint
 COPY scripts/docker/px4-failure.py /usr/local/bin/drn-px4-failure
+COPY scripts/docker/fleet-healthcheck.sh /usr/local/bin/drn-fleet-healthcheck
 COPY scripts/docker/gpu-renderer-check.sh /usr/local/bin/drn-gpu-renderer-check
 RUN chmod 0755 \
         /usr/local/bin/drn-px4-entrypoint \
         /usr/local/bin/drn-px4-failure \
+        /usr/local/bin/drn-fleet-healthcheck \
         /usr/local/bin/drn-gpu-renderer-check
 
 ENTRYPOINT ["/usr/local/bin/drn-px4-entrypoint"]

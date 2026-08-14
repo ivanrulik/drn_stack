@@ -71,6 +71,7 @@ DRN_ARTIFACT_DIR=/tmp/drn-evidence docker compose \
 python3 -m compileall -q \
   src/drn_viz/launch \
   scripts/docker/evidence.py \
+  scripts/docker/fleet-smoke.py \
   scripts/docker/hardware-smoke.py \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
@@ -235,6 +236,18 @@ for path in Path("foxglove").glob("*.json"):
             raise ValueError(f"{path}: LiDAR panel must render {lidar_topic}")
         if not panel_configs["3D!lidar"]["topics"][lidar_topic]["visible"]:
             raise ValueError(f"{path}: 3D panel must render {lidar_topic}")
+
+    if path.name == "drn-simulation-x500-multi.json":
+        for vehicle in ("px4_1", "px4_2"):
+            odometry = f"/{vehicle}/fmu/out/vehicle_odometry"
+            status = f"/{vehicle}/fmu/out/vehicle_status_v1"
+            if panel_configs[f"RawMessages!{vehicle}"]["topicPath"] != status:
+                raise ValueError(f"{path}: {vehicle} status panel must use {status}")
+            for plot_path in panel_configs[f"Plot!{vehicle}"]["paths"]:
+                if not plot_path["value"].startswith(f"{odometry}."):
+                    raise ValueError(f"{path}: {vehicle} plot must use {odometry}")
+        if any(panel_id.startswith("Teleop!") for panel_id in panel_configs):
+            raise ValueError(f"{path}: fleet layout must not expose Teleop")
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

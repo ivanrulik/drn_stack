@@ -10,10 +10,21 @@ has_capability() {
 }
 
 pgrep -x MicroXRCEAgent >/dev/null
-ros2 node list 2>/dev/null | grep -qx "/foxglove_bridge"
-ros2 node list 2>/dev/null | grep -qx "/odometry_tf_bridge"
+nodes="$(ros2 node list 2>/dev/null)"
+grep -qx "/foxglove_bridge" <<<"${nodes}"
+if has_capability multi-vehicle; then
+  grep -qx "/px4_1/odometry_tf_bridge" <<<"${nodes}"
+  grep -qx "/px4_2/odometry_tf_bridge" <<<"${nodes}"
+  grep -qx "/px4_1/robot_state_publisher" <<<"${nodes}"
+  grep -qx "/px4_2/robot_state_publisher" <<<"${nodes}"
+  if grep -qx "/drn_control" <<<"${nodes}"; then
+    exit 1
+  fi
+else
+  grep -qx "/odometry_tf_bridge" <<<"${nodes}"
+fi
 if [[ "${DRN_CONNECTION_MODE:-sitl}" == "hardware-udp" ]]; then
-  if ros2 node list 2>/dev/null | grep -qx "/drn_control"; then
+  if grep -qx "/drn_control" <<<"${nodes}"; then
     exit 1
   fi
 fi
