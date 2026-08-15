@@ -61,8 +61,9 @@ the upstream watchdog rather than bypassing its safety behavior.
 - Only one external mode is registered. This stays below the PX4 v1.17
   `ArmingCheckReply` queue-overflow case reported when more than four custom
   modes are registered.
-- This stack is single-vehicle. Multi-vehicle mode/executor naming and
-  isolation have an open upstream issue and are intentionally out of scope.
+- `drn_control` remains single-vehicle and is not launched by the observation-
+  only `x500-multi` profile. Multi-vehicle mode/executor naming and isolation
+  have an open upstream issue and remain intentionally out of scope.
 - The executor treats cancellation as terminal and uses generation guards so a
   cancelled callback cannot schedule a new mode from inside the interface
   library's cancellation path.

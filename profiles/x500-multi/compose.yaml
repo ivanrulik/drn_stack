@@ -5,12 +5,12 @@ services:
       DRN_AIRFRAME: x500
       DRN_PROFILE_CAPABILITIES: multi-vehicle
       DRN_SIM_MODEL_NAME: x500_1
-      DRN_FLEET_NAMESPACES: px4_1,px4_2
+      DRN_FLEET_SIZE: "${DRN_FLEET_SIZE:-2}"
 
   px4-sitl:
     environment:
       PX4_SIM_MODEL: gz_x500
-      DRN_FLEET_SIZE: "2"
+      DRN_FLEET_SIZE: "${DRN_FLEET_SIZE:-2}"
     healthcheck:
       test: ["CMD", "/usr/local/bin/drn-fleet-healthcheck"]
       start_period: 45s

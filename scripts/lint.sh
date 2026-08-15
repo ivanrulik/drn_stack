@@ -238,7 +238,7 @@ for path in Path("foxglove").glob("*.json"):
             raise ValueError(f"{path}: 3D panel must render {lidar_topic}")
 
     if path.name == "drn-simulation-x500-multi.json":
-        for vehicle in ("px4_1", "px4_2"):
+        for vehicle in ("px4_1", "px4_2", "px4_3", "px4_4"):
             odometry = f"/{vehicle}/fmu/out/vehicle_odometry"
             status = f"/{vehicle}/fmu/out/vehicle_status_v1"
             if panel_configs[f"RawMessages!{vehicle}"]["topicPath"] != status:

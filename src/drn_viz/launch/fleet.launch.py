@@ -1,4 +1,4 @@
-"""Launch an inert, observation-only two-vehicle PX4 visualization."""
+"""Launch an inert, observation-only bounded PX4 fleet visualization."""
 
 import os
 
@@ -9,10 +9,25 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-VEHICLES = (
-    ('px4_1', '0', '0', '/px4_1/fmu/out/vehicle_odometry'),
-    ('px4_2', '0', '2', '/px4_2/fmu/out/vehicle_odometry'),
-)
+MIN_FLEET_SIZE = 2
+MAX_FLEET_SIZE = 4
+
+
+def _fleet_specs(size):
+    """Return deterministic namespaces, grid poses, and odometry topics."""
+    specs = []
+    for instance in range(1, size + 1):
+        spawn_index = instance - 1
+        spawn_x = (spawn_index // 2) * 2
+        spawn_y = (spawn_index % 2) * 2
+        namespace = f'px4_{instance}'
+        specs.append((
+            namespace,
+            str(spawn_x),
+            str(spawn_y),
+            f'/{namespace}/fmu/out/vehicle_odometry',
+        ))
+    return tuple(specs)
 
 
 def _launch_setup(context, *args, **kwargs):
@@ -20,6 +35,13 @@ def _launch_setup(context, *args, **kwargs):
     del args, kwargs
     urdf_path = LaunchConfiguration('urdf').perform(context)
     foxglove_port = int(LaunchConfiguration('foxglove_port').perform(context))
+    fleet_size_text = LaunchConfiguration('fleet_size').perform(context)
+    try:
+        fleet_size = int(fleet_size_text)
+    except ValueError as error:
+        raise ValueError('fleet_size must be an integer from 2 through 4') from error
+    if not MIN_FLEET_SIZE <= fleet_size <= MAX_FLEET_SIZE:
+        raise ValueError('fleet_size must be an integer from 2 through 4')
 
     with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
         robot_description = urdf_file.read()
@@ -39,7 +61,7 @@ def _launch_setup(context, *args, **kwargs):
         ),
     ]
 
-    for namespace, spawn_x, spawn_y, odometry_topic in VEHICLES:
+    for namespace, spawn_x, spawn_y, odometry_topic in _fleet_specs(fleet_size):
         local_map = f'{namespace}/map'
         base_frame = f'{namespace}/base_link'
         nodes.extend([
@@ -89,11 +111,14 @@ def _launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    """Declare the fixed two-vehicle observation surface."""
+    """Declare the bounded fleet observation surface."""
     package_share = get_package_share_directory('drn_viz')
     default_urdf_path = os.path.join(package_share, 'urdf', 'x500.urdf')
     return LaunchDescription([
         DeclareLaunchArgument('urdf', default_value=default_urdf_path),
+        DeclareLaunchArgument(
+            'fleet_size', default_value=os.environ.get('DRN_FLEET_SIZE', '2')
+        ),
         DeclareLaunchArgument('foxglove_port', default_value='8765'),
         OpaqueFunction(function=_launch_setup),
     ])

@@ -9,6 +9,8 @@ action="${1:-}"
 shift || true
 
 profile="x500-basic"
+vehicle_count=""
+vehicle_count_set=0
 remaining_args=()
 while (( $# > 0 )); do
   case "$1" in
@@ -18,6 +20,15 @@ while (( $# > 0 )); do
         exit 2
       fi
       profile="$2"
+      shift 2
+      ;;
+    --vehicle-count)
+      if (( $# < 2 )); then
+        echo "--vehicle-count requires an integer from 2 through 4." >&2
+        exit 2
+      fi
+      vehicle_count="$2"
+      vehicle_count_set=1
       shift 2
       ;;
     *)
@@ -36,6 +47,18 @@ profile_dir="${REPO_ROOT}/profiles/${profile}"
 profile_compose="${profile_dir}/compose.yaml"
 if [[ ! -f "${profile_compose}" ]]; then
   echo "Unknown profile '${profile}': ${profile_compose} does not exist." >&2
+  exit 2
+fi
+if [[ "${profile}" == "x500-multi" ]]; then
+  vehicle_count="${vehicle_count:-${DRN_FLEET_SIZE:-2}}"
+  if [[ ! "${vehicle_count}" =~ ^[0-9]+$ ]] ||
+    (( vehicle_count < 2 || vehicle_count > 4 )); then
+    echo "--vehicle-count must be an integer from 2 through 4; got '${vehicle_count}'." >&2
+    exit 2
+  fi
+  export DRN_FLEET_SIZE="${vehicle_count}"
+elif (( vehicle_count_set )); then
+  echo "--vehicle-count is supported only with the x500-multi profile." >&2
   exit 2
 fi
 
@@ -174,7 +197,14 @@ print_summary() {
     echo "Rendering: ${gpu_acceleration}"
   fi
   if [[ "${profile}" == "x500-multi" ]]; then
-    echo "Fleet: px4_1 and px4_2 (observation only; control disabled)"
+    local fleet_names=()
+    local fleet_summary
+    local instance
+    for (( instance = 1; instance <= vehicle_count; instance++ )); do
+      fleet_names+=("px4_${instance}")
+    done
+    printf -v fleet_summary '%s, ' "${fleet_names[@]}"
+    echo "Fleet: ${fleet_summary%, } (observation only; control disabled)"
   fi
   echo "Foxglove: ws://localhost:${FOXGLOVE_PORT:-8765}"
   if [[ -f "${layout_path}" ]]; then
@@ -285,7 +315,7 @@ case "${action}" in
   clean) clean_stack "$@" ;;
   smoke) require_docker; smoke_full ;;
   *)
-    echo "Usage: $0 {run|stop|restart|status|logs|clean|smoke} [--profile NAME]" >&2
+    echo "Usage: $0 {run|stop|restart|status|logs|clean|smoke} [--profile NAME] [--vehicle-count 2-4]" >&2
     exit 2
     ;;
 esac
