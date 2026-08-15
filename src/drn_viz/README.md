@@ -14,6 +14,8 @@ The package:
   airframe name.
 - Normalizes simulated vision odometry to `map` -> `base_link` in ENU/FLU.
 - Bridges rendered 2D LiDAR through a stable `lidar_link` LaserScan contract.
+- Generates isolated TF and robot-model observation paths for two to four
+  namespaced x500 instances in the bounded fleet profile.
 
 ## Docker workflow
 
@@ -60,6 +62,8 @@ ros2 launch drn_viz visualize.launch.py
 - `capabilities`: comma-separated profile capabilities.
 - `model_name`: spawned Gazebo model instance; defaults to `x500_0`.
 - `world_name`: Gazebo world used to resolve transport topics.
+- `fleet_size` (`fleet.launch.py` only): bounded vehicle count from two through
+  four; defaults to `DRN_FLEET_SIZE` or two.
 
 Example:
 

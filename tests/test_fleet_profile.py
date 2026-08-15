@@ -19,7 +19,7 @@ SPEC.loader.exec_module(FLEET_SMOKE)
 class FleetProfileTests(unittest.TestCase):
     """Keep fleet launch, routing, and safety contracts aligned."""
 
-    def test_profile_is_fixed_to_two_plain_x500_instances(self):
+    def test_profile_defaults_to_two_and_passes_one_bounded_size(self):
         path = REPO_ROOT / 'profiles' / 'x500-multi' / 'compose.yaml'
         profile = yaml.safe_load(path.read_text(encoding='utf-8'))
         ros_environment = profile['services']['ros-viz']['environment']
@@ -30,10 +30,12 @@ class FleetProfileTests(unittest.TestCase):
             ros_environment['DRN_PROFILE_CAPABILITIES'], 'multi-vehicle'
         )
         self.assertEqual(
-            ros_environment['DRN_FLEET_NAMESPACES'], 'px4_1,px4_2'
+            ros_environment['DRN_FLEET_SIZE'], '${DRN_FLEET_SIZE:-2}'
         )
         self.assertEqual(px4['environment']['PX4_SIM_MODEL'], 'gz_x500')
-        self.assertEqual(px4['environment']['DRN_FLEET_SIZE'], '2')
+        self.assertEqual(
+            px4['environment']['DRN_FLEET_SIZE'], '${DRN_FLEET_SIZE:-2}'
+        )
         self.assertEqual(
             px4['healthcheck']['test'],
             ['CMD', '/usr/local/bin/drn-fleet-healthcheck'],
@@ -45,20 +47,37 @@ class FleetProfileTests(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('pgrep -cx px4', healthcheck)
-        self.assertIn('--instance 1 show MAV_SYS_ID', healthcheck)
-        self.assertIn('--instance 2 show MAV_SYS_ID', healthcheck)
-        self.assertIn("MAV_SYS_ID .*: 2$", healthcheck)
-        self.assertIn("MAV_SYS_ID .*: 3$", healthcheck)
-        self.assertEqual(healthcheck.count("grep -Fq 'Running, connected'"), 2)
+        self.assertIn('instance <= fleet_size', healthcheck)
+        self.assertIn('expected_system_id=$((instance + 1))', healthcheck)
+        self.assertIn('--instance "${instance}" show MAV_SYS_ID', healthcheck)
+        self.assertIn('--instance "${instance}" status', healthcheck)
+        self.assertIn("grep -Fq 'Running, connected'", healthcheck)
+
+    def test_fleet_size_contract_accepts_only_two_through_four(self):
+        expected = {
+            2: ('px4_1', 'px4_2'),
+            3: ('px4_1', 'px4_2', 'px4_3'),
+            4: ('px4_1', 'px4_2', 'px4_3', 'px4_4'),
+        }
+        for size, vehicles in expected.items():
+            self.assertEqual(FLEET_SMOKE.fleet_vehicles(size), vehicles)
+        for invalid in (1, 5, 'three', ''):
+            with self.assertRaisesRegex(
+                FLEET_SMOKE.FleetValidationError, 'integer from 2 through 4'
+            ):
+                FLEET_SMOKE.fleet_vehicles(invalid)
 
     def test_fleet_launch_is_namespaced_and_read_only(self):
         launch = (
             REPO_ROOT / 'src' / 'drn_viz' / 'launch' / 'fleet.launch.py'
         ).read_text(encoding='utf-8')
 
-        for namespace in ('px4_1', 'px4_2'):
-            self.assertIn(namespace, launch)
-            self.assertIn(f'/{namespace}/fmu/out/vehicle_odometry', launch)
+        self.assertIn("namespace = f'px4_{instance}'", launch)
+        self.assertIn("DeclareLaunchArgument(\n            'fleet_size'", launch)
+        self.assertIn('MIN_FLEET_SIZE = 2', launch)
+        self.assertIn('MAX_FLEET_SIZE = 4', launch)
+        self.assertIn('spawn_x = (spawn_index // 2) * 2', launch)
+        self.assertIn('spawn_y = (spawn_index % 2) * 2', launch)
         self.assertIn("'frame_prefix': f'{namespace}/'", launch)
         self.assertIn("'client_topic_whitelist': [r'^$']", launch)
         self.assertIn("'service_whitelist': [r'^$']", launch)
@@ -73,19 +92,35 @@ class FleetProfileTests(unittest.TestCase):
         ).read_text(encoding='utf-8')
 
         self.assertIn('DRN_FLEET_SIZE:-1', px4)
-        self.assertIn('PX4_UXRCE_DDS_NS=px4_1', px4)
-        self.assertIn('PX4_UXRCE_DDS_NS=px4_2', px4)
-        self.assertIn('PX4_GZ_STANDALONE=1', px4)
+        self.assertIn('instance <= fleet_size', px4)
+        self.assertIn('PX4_UXRCE_DDS_NS=px4_${instance}', px4)
+        self.assertIn('instance_environment+=("PX4_GZ_STANDALONE=1")', px4)
+        self.assertIn('wait_for_vehicle_odometry', px4)
+        self.assertIn('did not publish odometry within 60 seconds', px4)
         self.assertIn('fleet.launch.py', ros)
+        self.assertIn('fleet_size:=${DRN_FLEET_SIZE:-2}', ros)
         self.assertIn('Downstream project launch is disabled', ros)
 
-    def test_fleet_layout_has_both_vehicles_and_no_control_panels(self):
+    def test_lifecycle_accepts_count_only_for_multi_profile(self):
+        powershell = (REPO_ROOT / 'scripts' / 'simctl.ps1').read_text(
+            encoding='utf-8'
+        )
+        bash = (REPO_ROOT / 'scripts' / 'simctl.sh').read_text(encoding='utf-8')
+
+        self.assertIn('[Nullable[int]]$VehicleCount', powershell)
+        self.assertIn("$ResolvedVehicleCount -gt 4", powershell)
+        self.assertIn('VehicleCount is supported only', powershell)
+        self.assertIn('--vehicle-count)', bash)
+        self.assertIn('vehicle_count > 4', bash)
+        self.assertIn('--vehicle-count is supported only', bash)
+
+    def test_fleet_layout_covers_all_supported_slots_without_control_panels(self):
         path = REPO_ROOT / 'foxglove' / 'drn-simulation-x500-multi.json'
         layout = json.loads(path.read_text(encoding='utf-8'))
         panels = layout['configById']
 
         self.assertFalse(any(name.startswith('Teleop!') for name in panels))
-        for vehicle in ('px4_1', 'px4_2'):
+        for vehicle in FLEET_SMOKE.fleet_vehicles(4):
             self.assertEqual(
                 panels[f'RawMessages!{vehicle}']['topicPath'],
                 f'/{vehicle}/fmu/out/vehicle_status_v1',
@@ -98,9 +133,10 @@ class FleetProfileTests(unittest.TestCase):
                 )
 
     def test_graph_validation_accepts_only_scoped_observation_endpoints(self):
+        vehicles = FLEET_SMOKE.fleet_vehicles(4)
         nodes = ['/foxglove_bridge']
         topics = ['/tf', '/tf_static']
-        for vehicle in FLEET_SMOKE.VEHICLES:
+        for vehicle in vehicles:
             nodes.extend([
                 f'/{vehicle}/map_origin',
                 f'/{vehicle}/odometry_tf_bridge',
@@ -117,7 +153,7 @@ class FleetProfileTests(unittest.TestCase):
             ('topic', 'list'): topics,
             ('service', 'list'): ['/foxglove_bridge/get_parameters'],
         }
-        with mock.patch.object(
+        with mock.patch.object(FLEET_SMOKE, 'VEHICLES', vehicles), mock.patch.object(
             FLEET_SMOKE,
             'run_ros',
             side_effect=lambda command: outputs[tuple(command)],

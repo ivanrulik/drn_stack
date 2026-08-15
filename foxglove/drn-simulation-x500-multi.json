@@ -3,11 +3,11 @@
     "3D!fleet": {
       "cameraState": {
         "perspective": true,
-        "distance": 10,
+        "distance": 12,
         "phi": 45,
         "thetaOffset": 135,
-        "targetOffset": [0, 1, 0],
-        "target": [0, 1, 0],
+        "targetOffset": [1, 1, 0],
+        "target": [1, 1, 0],
         "targetOrientation": [0, 0, 0, 1],
         "fovy": 45,
         "near": 0.01,
@@ -23,11 +23,15 @@
       "transforms": {
         "frame:map": {"visible": true},
         "frame:px4_1/base_link": {"visible": true},
-        "frame:px4_2/base_link": {"visible": true}
+        "frame:px4_2/base_link": {"visible": true},
+        "frame:px4_3/base_link": {"visible": true},
+        "frame:px4_4/base_link": {"visible": true}
       },
       "topics": {
         "/px4_1/robot_description": {"visible": true},
-        "/px4_2/robot_description": {"visible": true}
+        "/px4_2/robot_description": {"visible": true},
+        "/px4_3/robot_description": {"visible": true},
+        "/px4_4/robot_description": {"visible": true}
       },
       "layers": {
         "fleet-map-grid": {
@@ -47,7 +51,7 @@
         }
       },
       "imageMode": {},
-      "foxglovePanelTitle": "Two x500 Fleet (Observation Only)"
+      "foxglovePanelTitle": "Bounded x500 Fleet (2-4, Observation Only)"
     },
     "Plot!px4_1": {
       "title": "px4_1 Position (NED)",
@@ -83,6 +87,40 @@
       "sidebarDimension": 220,
       "foxglovePanelTitle": "px4_2 Position"
     },
+    "Plot!px4_3": {
+      "title": "px4_3 Position (NED)",
+      "paths": [
+        {"value": "/px4_3/fmu/out/vehicle_odometry.position[0]", "enabled": true, "timestampMethod": "receiveTime", "label": "North"},
+        {"value": "/px4_3/fmu/out/vehicle_odometry.position[1]", "enabled": true, "timestampMethod": "receiveTime", "label": "East"},
+        {"value": "/px4_3/fmu/out/vehicle_odometry.position[2]", "enabled": true, "timestampMethod": "receiveTime", "label": "Down"}
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 220,
+      "foxglovePanelTitle": "px4_3 Position"
+    },
+    "Plot!px4_4": {
+      "title": "px4_4 Position (NED)",
+      "paths": [
+        {"value": "/px4_4/fmu/out/vehicle_odometry.position[0]", "enabled": true, "timestampMethod": "receiveTime", "label": "North"},
+        {"value": "/px4_4/fmu/out/vehicle_odometry.position[1]", "enabled": true, "timestampMethod": "receiveTime", "label": "East"},
+        {"value": "/px4_4/fmu/out/vehicle_odometry.position[2]", "enabled": true, "timestampMethod": "receiveTime", "label": "Down"}
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 220,
+      "foxglovePanelTitle": "px4_4 Position"
+    },
     "RawMessages!px4_1": {
       "topicPath": "/px4_1/fmu/out/vehicle_status_v1",
       "diffEnabled": false,
@@ -94,6 +132,18 @@
       "diffEnabled": false,
       "fontSize": 13,
       "foxglovePanelTitle": "px4_2 Status"
+    },
+    "RawMessages!px4_3": {
+      "topicPath": "/px4_3/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 13,
+      "foxglovePanelTitle": "px4_3 Status"
+    },
+    "RawMessages!px4_4": {
+      "topicPath": "/px4_4/fmu/out/vehicle_status_v1",
+      "diffEnabled": false,
+      "fontSize": 13,
+      "foxglovePanelTitle": "px4_4 Status"
     }
   },
   "globalVariables": {},
@@ -109,9 +159,19 @@
     "first": "3D!fleet",
     "second": {
       "direction": "column",
-      "first": {"direction": "row", "first": "Plot!px4_1", "second": "Plot!px4_2", "splitPercentage": 50},
-      "second": {"direction": "row", "first": "RawMessages!px4_1", "second": "RawMessages!px4_2", "splitPercentage": 50},
-      "splitPercentage": 55
+      "first": {
+        "direction": "column",
+        "first": {"direction": "row", "first": "Plot!px4_1", "second": "Plot!px4_2", "splitPercentage": 50},
+        "second": {"direction": "row", "first": "Plot!px4_3", "second": "Plot!px4_4", "splitPercentage": 50},
+        "splitPercentage": 50
+      },
+      "second": {
+        "direction": "column",
+        "first": {"direction": "row", "first": "RawMessages!px4_1", "second": "RawMessages!px4_2", "splitPercentage": 50},
+        "second": {"direction": "row", "first": "RawMessages!px4_3", "second": "RawMessages!px4_4", "splitPercentage": 50},
+        "splitPercentage": 50
+      },
+      "splitPercentage": 62
     },
     "splitPercentage": 55
   }

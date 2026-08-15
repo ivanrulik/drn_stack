@@ -10,6 +10,8 @@ param(
 
     [string]$Profile = 'x500-basic',
 
+    [Nullable[int]]$VehicleCount,
+
     [switch]$Force
 )
 
@@ -28,6 +30,28 @@ $ProfileDirectory = Join-Path $RepoRoot "profiles\$Profile"
 $ProfileCompose = Join-Path $ProfileDirectory 'compose.yaml'
 if (-not (Test-Path -LiteralPath $ProfileCompose -PathType Leaf)) {
     throw "Unknown profile '$Profile': $ProfileCompose does not exist."
+}
+$VehicleCountWasProvided = $PSBoundParameters.ContainsKey('VehicleCount')
+$ResolvedVehicleCount = 1
+if ($Profile -eq 'x500-multi') {
+    $FleetSizeText = if ($VehicleCountWasProvided) {
+        [string]$VehicleCount
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($env:DRN_FLEET_SIZE)) {
+        $env:DRN_FLEET_SIZE
+    }
+    else {
+        '2'
+    }
+
+    if (-not [int]::TryParse($FleetSizeText, [ref]$ResolvedVehicleCount) -or
+        $ResolvedVehicleCount -lt 2 -or $ResolvedVehicleCount -gt 4) {
+        throw "VehicleCount must be an integer from 2 through 4; got '$FleetSizeText'."
+    }
+    $env:DRN_FLEET_SIZE = [string]$ResolvedVehicleCount
+}
+elseif ($VehicleCountWasProvided) {
+    throw 'VehicleCount is supported only with the x500-multi profile.'
 }
 if ([string]::IsNullOrWhiteSpace($env:COMPOSE_PARALLEL_LIMIT)) {
     $env:COMPOSE_PARALLEL_LIMIT = '1'
@@ -269,7 +293,8 @@ function Show-Summary {
         Write-Host "Rendering: $GpuAcceleration"
     }
     if ($Profile -eq 'x500-multi') {
-        Write-Host 'Fleet: px4_1 and px4_2 (observation only; control disabled)'
+        $FleetNames = 1..$ResolvedVehicleCount | ForEach-Object { "px4_$_" }
+        Write-Host "Fleet: $($FleetNames -join ', ') (observation only; control disabled)"
     }
     Write-Host "Foxglove: ws://localhost:$FoxglovePort"
     $LayoutPath = Join-Path $RepoRoot "foxglove\drn-simulation-$Profile.json"

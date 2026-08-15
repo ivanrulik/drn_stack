@@ -45,6 +45,7 @@ elif [[ ",${DRN_PROFILE_CAPABILITIES:-}," == *",multi-vehicle,"* ]]; then
     exit 2
   fi
   ros2 launch drn_viz fleet.launch.py \
+    "fleet_size:=${DRN_FLEET_SIZE:-2}" \
     "foxglove_port:=${FOXGLOVE_PORT:-8765}" &
 else
   launch_args=(

@@ -11,7 +11,7 @@ can therefore reuse the lifecycle, safety, observation, and validation layers.
 | `x500-depth` | `gz_x500_depth` | Color, metric depth, camera calibration | Perception, mapping, and avoidance development |
 | `x500-vio` | `gz_x500_vision` | Simulated vision odometry | Localization integration and odometry consumers |
 | `x500-lidar` | `gz_x500_lidar_2d` | 270-degree 2D laser scan | Mapping, obstacle sensing, and scan consumers |
-| `x500-multi` | Two `gz_x500` instances | Namespaced PX4 telemetry | Fleet namespace, routing, TF, and observation tests |
+| `x500-multi` | Two to four `gz_x500` instances | Namespaced PX4 telemetry | Fleet namespace, routing, TF, and observation tests |
 
 Profiles are small Compose overrides under `profiles/`; the base topology,
 network namespace, safety gates, and lifecycle behavior remain shared.
@@ -27,6 +27,7 @@ PowerShell:
 .\scripts\run-sim.ps1 -Profile x500-vio
 .\scripts\run-sim.ps1 -Profile x500-lidar
 .\scripts\run-sim.ps1 -Profile x500-multi
+.\scripts\run-sim.ps1 -Profile x500-multi -VehicleCount 4
 ```
 
 Bash, Git Bash, or WSL:
@@ -38,11 +39,13 @@ bash ./scripts/restart.sh --profile x500-depth
 bash ./scripts/run-sim.sh --profile x500-vio
 bash ./scripts/run-sim.sh --profile x500-lidar
 bash ./scripts/run-sim.sh --profile x500-multi
+bash ./scripts/run-sim.sh --profile x500-multi --vehicle-count 4
 ```
 
-Pass the profile again when restarting so Compose recreates the same model.
-Stop commands work with the default arguments because all profiles use the
-same `drn-stack` project and service names.
+Pass the profile again when restarting so Compose recreates the same model. For
+`x500-multi`, also repeat `-VehicleCount` or `--vehicle-count` when the fleet is
+larger than the default two. Stop commands work with the default arguments
+because all profiles use the same `drn-stack` project and service names.
 
 ## Profile extension contract
 
@@ -218,30 +221,33 @@ these markers are visualization only and do not create simulator geometry.
 
 For `x500-multi`, import
 [`foxglove/drn-simulation-x500-multi.json`](../foxglove/drn-simulation-x500-multi.json).
-It shows both x500 models under `map`, separate NED position plots, and raw
-status inspection. Its Foxglove publication and service allowlists match
-nothing, so the layout is observation-only.
+It shows every supported x500 slot under `map`, separate NED position plots,
+and raw status inspection. Unused slots remain empty when fewer than four are
+requested. Its Foxglove publication and service allowlists match nothing, so
+the layout is observation-only.
 
 ## x500-multi fleet contract
 
-The first fleet slice is deliberately fixed at two plain x500 instances. It
-shares one Gazebo server, one ROS service, and one Micro XRCE-DDS Agent while
-assigning PX4 instances `1` and `2` unique DDS keys, MAVLink system IDs, model
-names, spawn poses, and ROS namespaces:
+The fleet profile supports an explicit count from two through four plain x500
+instances and defaults to two. It shares one Gazebo server, one ROS service,
+and one Micro XRCE-DDS Agent while assigning every PX4 instance a unique DDS
+key, MAVLink system ID, model name, spawn pose, and ROS namespace:
 
 | Vehicle | Spawn pose | ROS namespace | TF chain |
 | --- | --- | --- | --- |
 | `x500_1` | `(0, 0)` | `/px4_1` | `map -> px4_1/map -> px4_1/base_link` |
 | `x500_2` | `(0, 2)` | `/px4_2` | `map -> px4_2/map -> px4_2/base_link` |
+| `x500_3` | `(2, 0)` | `/px4_3` | `map -> px4_3/map -> px4_3/base_link` |
+| `x500_4` | `(2, 2)` | `/px4_4` | `map -> px4_4/map -> px4_4/base_link` |
 
-The full smoke check requires three fresh odometry and status samples from
-both namespaces, both vehicles continuously disarmed, both TF chains, no
+The full smoke check requires three fresh odometry and status samples from each
+requested namespace, every vehicle continuously disarmed, every TF chain, no
 unnamespaced `/fmu/*` topics, and no `/drn_control` or `/drn/control/*`
 endpoints. Downstream-project launch is disabled in this profile.
 
 This slice does not support fleet control, Teleop, arming, takeoff, mixed
-airframes, sensor profiles, or hardware. The two-vehicle limit is intentional;
-raise it only after recording a new startup, CPU, memory, and timing baseline.
+airframes, sensor profiles, hardware, or more than four vehicles. Counts above
+four fail before Compose startup instead of attempting an unqualified load.
 
 ## Validation and resource expectations
 
@@ -300,7 +306,7 @@ These are routing measurements, not cross-host performance guarantees. Compare
 future measurements on the same host and rendering mode; actual rates and CPU
 load depend on subscribers and scene complexity.
 
-### Two-vehicle resource gate
+### Bounded fleet resource gate
 
 The fixed `x500-multi` slice was measured on 2026-08-13 using the pinned images
 and Docker Desktop software rendering on the same 32 GB Windows host:
@@ -321,3 +327,27 @@ The fleet container uses direct PX4 instance launches instead of retaining the
 single-profile build wrapper processes, so its lower sampled memory is not a
 claim that two vehicles inherently require less memory. These are routing
 measurements, not cross-host performance guarantees.
+
+The bounded-count extension retains that two-vehicle regression and adds a
+four-vehicle maximum-load run to Docker CI. Both paths must reach healthy within
+300 seconds, pass fresh telemetry/disarmed/TF/isolation checks, and record CPU,
+memory, process count, and startup time. Three vehicles use the same generated
+identity and 2-by-2 spawn-grid path and remain covered by unit validation.
+
+The expanded paths were qualified on 2026-08-14 on the same 32 GB Windows host:
+
+- Three vehicles completed a cached stop/recreate/readiness/full-smoke lifecycle
+  in 52.8 seconds. Three sustained samples used 389.9 to 390.5 MiB combined and
+  3.64 to 3.77 logical CPU cores; Gazebo real-time factor remained 0.9999 to
+  1.0003.
+- Four vehicles completed the same lifecycle in 63.9 seconds. Three sustained
+  samples used 467.9 to 468.7 MiB combined. PX4 and Gazebo used 6.15 to 6.98
+  logical CPU cores while ROS used 0.15 to 0.63; combined peak use was 7.24
+  cores. Gazebo real-time factor remained 0.9992 to 1.0007.
+- Both expanded counts passed exact process/model/identity checks, three fresh
+  odometry and status samples per namespace, continuous disarmed state, all TF
+  chains, and the absence of unscoped PX4 or DRN control endpoints.
+
+Four remains the fail-closed maximum because it is the highest count qualified
+on both the local 16-CPU Docker allocation and the repository CI path. Raising
+the cap requires a separate resource baseline and review.

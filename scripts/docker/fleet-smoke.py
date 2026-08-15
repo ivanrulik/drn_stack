@@ -1,15 +1,43 @@
 #!/usr/bin/env python3
-"""Validate the inert two-vehicle ROS graph and telemetry contract."""
+"""Validate the inert bounded-fleet ROS graph and telemetry contract."""
 
+import os
 import subprocess
 import time
 
 
-VEHICLES = ('px4_1', 'px4_2')
+MIN_FLEET_SIZE = 2
+MAX_FLEET_SIZE = 4
 
 
 class FleetValidationError(RuntimeError):
     """A fleet namespace, telemetry, or safety contract was not satisfied."""
+
+
+def fleet_size(value=None):
+    """Return the validated bounded fleet size from an explicit or env value."""
+    raw_value = str(
+        value if value is not None else os.environ.get('DRN_FLEET_SIZE', '2')
+    )
+    if not raw_value.isdecimal():
+        raise FleetValidationError(
+            f'DRN_FLEET_SIZE must be an integer from 2 through 4; got {raw_value!r}'
+        )
+    size = int(raw_value)
+    if not MIN_FLEET_SIZE <= size <= MAX_FLEET_SIZE:
+        raise FleetValidationError(
+            f'DRN_FLEET_SIZE must be an integer from 2 through 4; got {raw_value!r}'
+        )
+    return size
+
+
+def fleet_vehicles(size=None):
+    """Return the stable PX4 namespace sequence for one supported fleet."""
+    resolved_size = fleet_size(size)
+    return tuple(f'px4_{instance}' for instance in range(1, resolved_size + 1))
+
+
+VEHICLES = fleet_vehicles()
 
 
 def run_ros(command, timeout=15):
@@ -139,7 +167,9 @@ def main():
     """Run the complete read-only fleet acceptance check."""
     collect_telemetry()
     validate_graph()
-    print('Fleet smoke passed: px4_1 and px4_2 are isolated and disarmed.')
+    print(
+        f'Fleet smoke passed: {", ".join(VEHICLES)} are isolated and disarmed.'
+    )
     return 0
 
 

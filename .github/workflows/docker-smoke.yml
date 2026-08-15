@@ -195,6 +195,45 @@ jobs:
             -f compose.yaml -f profiles/x500-multi/compose.yaml \
             down --remove-orphans --volumes --timeout 30
 
+      - name: Start maximum four-vehicle profile and record resource baseline
+        env:
+          DRN_FLEET_SIZE: "4"
+        run: |
+          started_at="$(date +%s)"
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            up -d --no-build --wait --wait-timeout 300
+          startup_seconds="$(($(date +%s) - started_at))"
+          {
+            echo '### x500-multi four-vehicle resource baseline'
+            echo
+            echo "- Startup to healthy: ${startup_seconds} seconds"
+            echo
+            echo '| Container | CPU | Memory | PIDs |'
+            echo '| --- | ---: | ---: | ---: |'
+            docker stats --no-stream \
+              --format '| {{.Name}} | {{.CPUPerc}} | {{.MemUsage}} | {{.PIDs}} |' \
+              drn-stack-ros-viz-1 drn-stack-px4-sitl-1
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
+          test "${startup_seconds}" -le 300
+
+      - name: Verify maximum fleet namespaces, TF, telemetry, and inert state
+        run: bash scripts/simctl.sh smoke --profile x500-multi --vehicle-count 4
+
+      - name: Capture maximum x500-multi logs on failure
+        if: failure()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            logs --no-color --tail=500
+
+      - name: Stop maximum x500-multi profile
+        if: always()
+        run: |
+          docker compose --project-name drn-stack \
+            -f compose.yaml -f profiles/x500-multi/compose.yaml \
+            down --remove-orphans --volumes --timeout 30
+
       - name: Run inert downstream-project scenario
         env:
           DRN_EVIDENCE: "1"

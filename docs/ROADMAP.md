@@ -1,6 +1,6 @@
 # Open-source Ecosystem Roadmap
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-14
 
 ## Purpose
 
@@ -154,14 +154,15 @@ fail closed when identity, transport, or compatibility checks are incomplete.
 Provide reproducible fleet simulation infrastructure without prematurely
 building a general swarm-autonomy framework.
 
-### Delivered first slice and remaining scope
+### Delivered scope and control boundary
 
 - [x] Generate two PX4 instances with unique instance numbers,
   DDS keys, MAVLink system IDs, ROS namespaces, and spawn poses.
 - [x] Publish isolated TF trees and stable vehicle identifiers.
 - [x] Provide fleet health reporting and a multi-vehicle Foxglove layout.
 - [x] Add non-arming namespace, routing, and isolation tests.
-- [ ] Generalize beyond two vehicles only after additional resource baselines.
+- [x] Generalize to an explicit bounded count of two through four vehicles after
+  local and CI resource qualification.
 
 The first implementation should focus on simulation, observation, and routing.
 PX4 supports multiple ROS 2 clients through one XRCE-DDS agent, but the
@@ -216,12 +217,13 @@ Status: in progress.
 
 ### Phase 5: Multi-vehicle
 
-Status: in progress.
+Status: complete for simulation and observation; fleet control remains deferred.
 
 - [x] Deliver a bounded two-vehicle namespaced simulation and observation slice.
-- [ ] Generalize the requested vehicle count after resource qualification.
-- Gate fleet control on focused upstream compatibility research and
-  operator-in-the-loop validation.
+- [x] Generalize the requested vehicle count from two through four after local
+  resource qualification, with default and maximum CI coverage.
+- Fleet control remains gated on focused upstream compatibility research and
+  operator-in-the-loop validation rather than being part of this phase.
 
 ## Strategic boundaries
 

@@ -20,6 +20,7 @@ quick_smoke() {
   local nodes
   local services
   local topics
+  local vehicle
 
   nodes="$(ros2 node list)"
   topics="$(ros2 topic list)"
@@ -27,7 +28,12 @@ quick_smoke() {
 
   grep -Fx /foxglove_bridge <<<"${nodes}" >/dev/null
   if has_capability multi-vehicle; then
-    for vehicle in px4_1 px4_2; do
+    local fleet_size="${DRN_FLEET_SIZE:-2}"
+    local instance
+    [[ "${fleet_size}" =~ ^[0-9]+$ ]]
+    (( fleet_size >= 2 && fleet_size <= 4 ))
+    for (( instance = 1; instance <= fleet_size; instance++ )); do
+      vehicle="px4_${instance}"
       grep -Fx "/${vehicle}/odometry_tf_bridge" <<<"${nodes}" >/dev/null
       grep -Fx "/${vehicle}/robot_state_publisher" <<<"${nodes}" >/dev/null
       grep -Fx "/${vehicle}/fmu/out/vehicle_odometry" <<<"${topics}" >/dev/null
@@ -77,10 +83,16 @@ quick_smoke() {
 
 full_smoke() {
   local control_status
+  local vehicle
 
   if has_capability multi-vehicle; then
     timeout 120 /usr/local/bin/drn-fleet-smoke
-    for vehicle in px4_1 px4_2; do
+    local fleet_size="${DRN_FLEET_SIZE:-2}"
+    local instance
+    [[ "${fleet_size}" =~ ^[0-9]+$ ]]
+    (( fleet_size >= 2 && fleet_size <= 4 ))
+    for (( instance = 1; instance <= fleet_size; instance++ )); do
+      vehicle="px4_${instance}"
       (
         set +o pipefail
         timeout 20 ros2 run tf2_ros tf2_echo map "${vehicle}/base_link" 2>&1 |

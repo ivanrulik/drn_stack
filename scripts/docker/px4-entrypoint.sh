@@ -52,7 +52,14 @@ if [[ "${DRN_GPU_ACCELERATION:-software}" == "nvidia" ]]; then
   /usr/local/bin/drn-gpu-renderer-check
 fi
 
-if [[ "${DRN_FLEET_SIZE:-1}" == "2" ]]; then
+fleet_size="${DRN_FLEET_SIZE:-1}"
+if [[ ! "${fleet_size}" =~ ^[0-9]+$ ]] ||
+  (( fleet_size != 1 && (fleet_size < 2 || fleet_size > 4) )); then
+  echo "DRN_FLEET_SIZE must be 1 or an integer from 2 through 4." >&2
+  exit 2
+fi
+
+if (( fleet_size >= 2 )); then
   px4_binary="/opt/PX4-Autopilot/build/px4_sitl_default/bin/px4"
   fleet_pids=()
 
@@ -71,37 +78,56 @@ if [[ "${DRN_FLEET_SIZE:-1}" == "2" ]]; then
   }
   trap shutdown_fleet TERM INT EXIT
 
-  PX4_SYS_AUTOSTART=4001 \
-  PX4_UXRCE_DDS_NS=px4_1 \
-  PX4_GZ_MODEL_POSE="0,0" \
-  GZ_IP=127.0.0.1 \
-    "${px4_binary}" -i 1 &
-  fleet_pids+=("$!")
+  wait_for_vehicle_odometry() {
+    local instance="$1"
+    local pid="$2"
+    local deadline=$((SECONDS + 60))
+    local output
 
-  # The first PX4 instance owns gz-server. Wait for its create service before
-  # attaching the second instance to avoid a duplicate-server startup race.
-  # shellcheck disable=SC2016 # Expanded by the exported child environment.
-  timeout 60 bash -c \
-    'until gz service -l 2>/dev/null | grep -Fx "/world/${PX4_GZ_WORLD}/create" >/dev/null; do sleep 1; done'
+    while (( SECONDS < deadline )); do
+      if ! kill -0 "${pid}" 2>/dev/null; then
+        echo "PX4 instance ${instance} exited before publishing odometry." >&2
+        return 1
+      fi
+      output="$(
+        "${px4_binary%/px4}/px4-listener" \
+          --instance "${instance}" vehicle_odometry -n 1 2>/dev/null || true
+      )"
+      if grep -Fq 'timestamp:' <<<"${output}"; then
+        return 0
+      fi
+      sleep 1
+    done
 
-  PX4_SYS_AUTOSTART=4001 \
-  PX4_UXRCE_DDS_NS=px4_2 \
-  PX4_GZ_STANDALONE=1 \
-  PX4_GZ_MODEL_POSE="0,2" \
-  GZ_IP=127.0.0.1 \
-    "${px4_binary}" -i 2 &
-  fleet_pids+=("$!")
+    echo "PX4 instance ${instance} did not publish odometry within 60 seconds." >&2
+    return 1
+  }
+
+  for (( instance = 1; instance <= fleet_size; instance++ )); do
+    spawn_index=$((instance - 1))
+    spawn_x=$(((spawn_index / 2) * 2))
+    spawn_y=$(((spawn_index % 2) * 2))
+    instance_environment=(
+      "PX4_SYS_AUTOSTART=4001"
+      "PX4_UXRCE_DDS_NS=px4_${instance}"
+      "PX4_GZ_MODEL_POSE=${spawn_x},${spawn_y}"
+      "GZ_IP=127.0.0.1"
+    )
+    if (( instance > 1 )); then
+      instance_environment+=("PX4_GZ_STANDALONE=1")
+    fi
+
+    env "${instance_environment[@]}" "${px4_binary}" -i "${instance}" &
+    instance_pid="$!"
+    fleet_pids+=("${instance_pid}")
+    wait_for_vehicle_odometry "${instance}" "${instance_pid}"
+  done
 
   set +e
   wait -n "${fleet_pids[@]}"
   status=$?
   set -e
   exit "${status}"
-fi
-
-if [[ "${DRN_FLEET_SIZE:-1}" != "1" ]]; then
-  echo "DRN_FLEET_SIZE must be 1 or the supported bounded value 2." >&2
-  exit 2
 fi
 
 exec make px4_sitl "${PX4_SIM_MODEL}"

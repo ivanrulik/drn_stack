@@ -47,6 +47,29 @@ class CiSmokeTests(unittest.TestCase):
         )
         self.assertEqual(upload['with']['if-no-files-found'], 'error')
 
+    def test_bounded_fleet_ci_runs_default_and_maximum_counts(self):
+        workflow_path = REPO_ROOT / '.github' / 'workflows' / 'docker-smoke.yml'
+        workflow = yaml.safe_load(workflow_path.read_text(encoding='utf-8'))
+        steps = workflow['jobs']['docker-smoke']['steps']
+
+        names = {step['name'] for step in steps}
+        self.assertIn('Start x500-multi profile and record resource baseline', names)
+        maximum_start = next(
+            step
+            for step in steps
+            if step['name']
+            == 'Start maximum four-vehicle profile and record resource baseline'
+        )
+        maximum_smoke = next(
+            step
+            for step in steps
+            if step['name']
+            == 'Verify maximum fleet namespaces, TF, telemetry, and inert state'
+        )
+
+        self.assertEqual(maximum_start['env']['DRN_FLEET_SIZE'], '4')
+        self.assertIn('--vehicle-count 4', maximum_smoke['run'])
+
 
 if __name__ == '__main__':
     unittest.main()
