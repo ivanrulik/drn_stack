@@ -214,9 +214,11 @@ On Windows, reclaim unused VHDX space without pruning Docker data:
 ```
 
 The reclaim command refuses to proceed while any Docker container is running.
-It stops Docker Desktop and all WSL distributions, trims the Docker filesystem,
-allows Windows to compact the VHDX, and restarts Docker Desktop. Images,
-containers, volumes, and build cache are preserved.
+Run it from an Administrator PowerShell window so it can explicitly compact the
+dynamically expanding VHDX after trimming the Docker filesystem. It stops Docker
+Desktop and all WSL distributions, then restores Docker Desktop to its original
+running or stopped state. Images, containers, volumes, and build cache are
+preserved.
 
 ## Quality checks
 
