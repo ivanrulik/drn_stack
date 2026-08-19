@@ -51,3 +51,22 @@ fallback. PX4-Autopilot is distributed under the BSD-3-Clause license.
 commit `b6127f4ec20de867e215fb5f78ae88b80f371909`. DRN changes only the update
 rate used by the software-rendering fallback. PX4-gazebo-models is distributed
 under the BSD-3-Clause license.
+
+## PX4 downward monocular camera model
+
+`profiles/x500-precision-land/models/mono_cam/model.sdf` is derived from the
+`mono_cam` model in `PX4/PX4-gazebo-models` at the PX4-pinned submodule commit
+`b6127f4ec20de867e215fb5f78ae88b80f371909`. DRN changes only the image
+resolution and update rate used by the software-rendering fallback.
+PX4-gazebo-models is distributed under the BSD-3-Clause license.
+
+## ARK Electronics Tracktor Beam
+
+The marker dictionary, target defaults, and ArUco pose-estimation approach in
+`src/drn_viz/src/landing_target_detector.cpp` were informed by ARK
+Electronics' `tracktor-beam` repository at commit
+`0d843dfbf61b035eb1e27b8f71e0c5674236255b`. DRN replaces its flight-control
+path with the pinned PX4 ROS 2 Interface mode, stable topics, target-loss Hold,
+operator preemption, and inert validation. Tracktor Beam is distributed under
+the BSD-3-Clause license, copyright 2025 ARK Electronics. The upstream license
+is retained in `src/drn_viz/ARK_TRACKTOR_BEAM_LICENSE`.

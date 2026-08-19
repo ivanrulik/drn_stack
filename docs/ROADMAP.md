@@ -108,6 +108,8 @@ control.
 - `x500-depth`: forward-facing depth camera.
 - `x500-vio`: ground-truth-derived simulated vision odometry.
 - `x500-lidar`: 270-degree ROS 2 laser-scan output.
+- `x500-precision-land`: downward ArUco perception plus an explicitly
+  operator-started align-and-descend mode.
 
 Each profile should own its:
 
@@ -224,6 +226,20 @@ Status: complete for simulation and observation; fleet control remains deferred.
   resource qualification, with default and maximum CI coverage.
 - Fleet control remains gated on focused upstream compatibility research and
   operator-in-the-loop validation rather than being part of this phase.
+
+### Phase 6: Operator-gated precision landing
+
+Status: implemented; armed SITL acceptance remains pending.
+
+- [x] Reuse the pinned PX4 downward-camera model and ArUco world through a
+  discoverable profile with hardware and software renderer paths.
+- [x] Publish stable landing-camera, detector, target-pose, TF, status, and
+  Foxglove observation contracts.
+- [x] Add a bounded PX4 ROS 2 Interface mode with target freshness, alignment,
+  descent-rate limits, target-loss Hold, and operator preemption.
+- [x] Keep automated smoke validation continuously disarmed.
+- [ ] Complete the documented operator-in-the-loop takeoff, landing, abort,
+  target-loss, Land, and RTL acceptance matrix in SITL.
 
 ## Strategic boundaries
 

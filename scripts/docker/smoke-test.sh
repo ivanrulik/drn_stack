@@ -59,6 +59,8 @@ quick_smoke() {
   grep -Fx /drn/control/hold <<<"${services}" >/dev/null
   grep -Fx /drn/control/land <<<"${services}" >/dev/null
   grep -Fx /drn/control/rtl <<<"${services}" >/dev/null
+  grep -Fx /drn/control/precision_land <<<"${services}" >/dev/null
+  grep -Fx /drn/control/precision_land/abort <<<"${services}" >/dev/null
   if has_capability depth-camera; then
     grep -Fx /depth_camera_bridge <<<"${nodes}" >/dev/null
     grep -Fx /drn/sensors/front/color/image_raw <<<"${topics}" >/dev/null
@@ -77,6 +79,13 @@ quick_smoke() {
     grep -Fx /lidar_world_markers <<<"${nodes}" >/dev/null
     grep -Fx /drn/sensors/lidar/scan <<<"${topics}" >/dev/null
     grep -Fx /drn/viz/lidar/walls <<<"${topics}" >/dev/null
+  fi
+  if has_capability precision-landing; then
+    grep -Fx /landing_camera_bridge <<<"${nodes}" >/dev/null
+    grep -Fx /landing_target_detector <<<"${nodes}" >/dev/null
+    grep -Fx /drn/sensors/landing/image_raw <<<"${topics}" >/dev/null
+    grep -Fx /drn/sensors/landing/camera_info <<<"${topics}" >/dev/null
+    grep -Fx /drn/sensors/landing/visible <<<"${topics}" >/dev/null
   fi
   foxglove_listening
 }
@@ -149,6 +158,14 @@ full_smoke() {
     (
       set +o pipefail
       timeout 15 ros2 run tf2_ros tf2_echo base_link lidar_link 2>&1 |
+        grep -m1 -q "Translation"
+    )
+  fi
+  if has_capability precision-landing; then
+    timeout 100 /usr/local/bin/drn-precision-landing-smoke
+    (
+      set +o pipefail
+      timeout 15 ros2 run tf2_ros tf2_echo base_link landing_camera_optical 2>&1 |
         grep -m1 -q "Translation"
     )
   fi

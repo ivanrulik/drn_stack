@@ -1,6 +1,6 @@
 # Simulation profiles
 
-DRN Stack ships five supported profiles on the current x500 airframe. The
+DRN Stack ships six supported profiles on the current x500 airframe. The
 profile contract itself is airframe-neutral: each directory declares its
 airframe, PX4 model, capabilities, and spawned Gazebo model name. New airframes
 can therefore reuse the lifecycle, safety, observation, and validation layers.
@@ -11,6 +11,7 @@ can therefore reuse the lifecycle, safety, observation, and validation layers.
 | `x500-depth` | `gz_x500_depth` | Color, metric depth, camera calibration | Perception, mapping, and avoidance development |
 | `x500-vio` | `gz_x500_vision` | Simulated vision odometry | Localization integration and odometry consumers |
 | `x500-lidar` | `gz_x500_lidar_2d` | 270-degree 2D laser scan | Mapping, obstacle sensing, and scan consumers |
+| `x500-precision-land` | `gz_x500_mono_cam_down` | Downward image, calibration, ArUco target pose | Operator-gated precision landing in SITL |
 | `x500-multi` | Two to four `gz_x500` instances | Namespaced PX4 telemetry | Fleet namespace, routing, TF, and observation tests |
 
 Profiles are small Compose overrides under `profiles/`; the base topology,
@@ -26,6 +27,7 @@ PowerShell:
 .\scripts\restart.ps1 -Profile x500-depth
 .\scripts\run-sim.ps1 -Profile x500-vio
 .\scripts\run-sim.ps1 -Profile x500-lidar
+.\scripts\run-sim.ps1 -Profile x500-precision-land
 .\scripts\run-sim.ps1 -Profile x500-multi
 .\scripts\run-sim.ps1 -Profile x500-multi -VehicleCount 4
 ```
@@ -38,6 +40,7 @@ bash ./scripts/status.sh --profile x500-depth
 bash ./scripts/restart.sh --profile x500-depth
 bash ./scripts/run-sim.sh --profile x500-vio
 bash ./scripts/run-sim.sh --profile x500-lidar
+bash ./scripts/run-sim.sh --profile x500-precision-land
 bash ./scripts/run-sim.sh --profile x500-multi
 bash ./scripts/run-sim.sh --profile x500-multi --vehicle-count 4
 ```
@@ -61,7 +64,7 @@ values on `ros-viz`:
 | `DRN_SIM_MODEL_NAME` | Spawned Gazebo model instance used to resolve topics |
 
 The currently supported capabilities are `depth-camera`, `laser-scan`,
-`multi-vehicle`, and `vision-odometry`. ROS launch behavior, health checks, and
+`multi-vehicle`, `precision-landing`, and `vision-odometry`. ROS launch behavior, health checks, and
 full smoke checks
 select functionality by capability instead of by airframe name. A profile that
 needs optional GPU rendering can provide matching `compose.gpu.yaml` and
@@ -74,7 +77,7 @@ operator gates.
 ## GPU acceleration
 
 The lifecycle scripts run an EGL renderer probe in the pinned PX4 image whenever
-`x500-depth` or `x500-lidar` starts or restarts. They add the NVIDIA GPU override
+`x500-depth`, `x500-lidar`, or `x500-precision-land` starts or restarts. They add the NVIDIA GPU override
 only when that probe initializes a hardware renderer and rejects Mesa software
 rasterizers such as llvmpipe. A successful `nvidia-smi` check alone is not enough
 because it can prove compute access without proving the OpenGL/EGL path Gazebo
@@ -85,6 +88,9 @@ color from 1920 x 1080 at 30 Hz to 640 x 360 at 10 Hz and lowers depth from 30
 to 15 Hz while preserving its 640 x 480 resolution. The LiDAR software override
 preserves all 1,080 rays and lowers the scan rate from 30 to 10 Hz. Hardware
 rendering retains the upstream resolutions and 30 Hz rates.
+
+The precision-landing software override lowers the downward camera from
+1280 x 960 at 30 Hz to 640 x 480 at 15 Hz without changing its field of view.
 
 Set `DRN_GPU_MODE` to control that behavior:
 
@@ -151,6 +157,35 @@ topics using `PX4_GZ_WORLD`; the default world remains `default`.
 The Gazebo point-cloud topic is deliberately not bridged in this first slice.
 Consumers should derive a cloud from the depth image and calibration when they
 need one, avoiding duplicate high-bandwidth transport for projects that do not.
+
+## x500-precision-land ROS contract
+
+The profile uses PX4's pinned `gz_x500_mono_cam_down` model and `aruco` world.
+The detector is derived from the useful perception portion of ARK Electronics'
+[Tracktor Beam](https://github.com/ARK-Electronics/tracktor-beam) example, but
+is integrated into DRN's stable topics, pinned ROS image, official PX4 mode
+executor, and safety gates.
+
+| Topic | Type | Contract |
+| --- | --- | --- |
+| `/drn/sensors/landing/image_raw` | `sensor_msgs/msg/Image` | Downward camera image from Gazebo |
+| `/drn/sensors/landing/camera_info` | `sensor_msgs/msg/CameraInfo` | Matching camera intrinsics |
+| `/drn/sensors/landing/visible` | `std_msgs/msg/Bool` | Detector heartbeat and current visibility |
+| `/drn/sensors/landing/target_pose` | `geometry_msgs/msg/PoseStamped` | Marker `0` relative pose in `landing_camera_optical` |
+| `/drn/sensors/landing/debug/image` | `sensor_msgs/msg/Image` | Annotated observation image |
+
+The detector uses OpenCV dictionary `DICT_4X4_250`, marker ID `0`, and a
+0.5-metre marker matching the pinned PX4 world. The controller converts the
+optical-frame target through body FRD into PX4 NED, aligns horizontally,
+requires a bounded alignment dwell, and then descends at a limited rate. It
+pauses descent to realign, hands off the final 0.6 metres to PX4 Land, and
+returns to Hold when the target becomes stale. It does not search for a target.
+
+Precision landing is never automatic. The operator must activate DRN Control,
+request takeoff, confirm a current target, and call
+`/drn/control/precision_land`. Hold, Land, RTL, and
+`/drn/control/precision_land/abort` preempt the sequence. These armed steps are
+operator-in-the-loop SITL checks and are not part of automated smoke testing.
 
 ## x500-vio ROS contract
 
@@ -219,6 +254,11 @@ flight or a separately spawned obstacle. Translucent blue markers reproduce the
 four pinned wall collision boxes so the returns have visible scene context;
 these markers are visualization only and do not create simulator geometry.
 
+For `x500-precision-land`, import
+[`foxglove/drn-simulation-x500-precision-land.json`](../foxglove/drn-simulation-x500-precision-land.json).
+It shows the annotated downward image, target pose, control status, and TF
+context without adding Teleop controls.
+
 For `x500-multi`, import
 [`foxglove/drn-simulation-x500-multi.json`](../foxglove/drn-simulation-x500-multi.json).
 It shows every supported x500 slot under `map`, separate NED position plots,
@@ -277,6 +317,12 @@ For `x500-lidar`, the full smoke check requires three timestamp-distinct scans,
 the 1,080-ray angular and range contract, valid finite or positive-infinite
 ranges with finite obstacle returns, `base_link -> lidar_link` TF, and a current
 PX4 status reporting disarmed.
+
+For `x500-precision-land`, the full smoke check requires camera images,
+calibration, detector visibility heartbeats, the landing-camera TF, both
+precision-landing services, and a current PX4 status reporting disarmed. A pose
+is validated when the marker is visible, but positive detection is not required
+while the vehicle is sitting on the marker at its inert spawn height.
 
 ### LiDAR resource gate
 

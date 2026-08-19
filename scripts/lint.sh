@@ -76,6 +76,7 @@ python3 -m compileall -q \
   scripts/docker/px4-failure.py \
   scripts/docker/project-sdk.py \
   scripts/docker/lidar-smoke.py \
+  scripts/docker/precision-landing-smoke.py \
   scripts/docker/sensor-smoke.py \
   scripts/docker/vision-odometry-smoke.py \
   projects/example_inspection/ros_ws/src/drn_example_inspection
@@ -116,6 +117,7 @@ required_files = (
     Path("docs/EVIDENCE_PACKS.md"),
     Path("docs/HARDWARE_UDP.md"),
     Path("src/drn_viz/meshes/LICENSE"),
+    Path("src/drn_viz/ARK_TRACKTOR_BEAM_LICENSE"),
 )
 for path in required_files:
     if not path.is_file():
@@ -248,6 +250,15 @@ for path in Path("foxglove").glob("*.json"):
                     raise ValueError(f"{path}: {vehicle} plot must use {odometry}")
         if any(panel_id.startswith("Teleop!") for panel_id in panel_configs):
             raise ValueError(f"{path}: fleet layout must not expose Teleop")
+
+    if path.name == "drn-simulation-x500-precision-land.json":
+        image = panel_configs["Image!landing"]["imageMode"]
+        if image["imageTopic"] != "/drn/sensors/landing/debug/image":
+            raise ValueError(f"{path}: landing image must use the detector output")
+        if image["calibrationTopic"] != "/drn/sensors/landing/camera_info":
+            raise ValueError(f"{path}: landing image must use landing calibration")
+        if any(panel_id.startswith("Teleop!") for panel_id in panel_configs):
+            raise ValueError(f"{path}: precision-landing layout must not expose Teleop")
 PY
 
 if command -v pwsh >/dev/null 2>&1; then

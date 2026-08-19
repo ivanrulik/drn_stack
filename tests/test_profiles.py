@@ -311,6 +311,86 @@ class SimulationProfileTests(unittest.TestCase):
             panels['3D!lidar']['topics']['/drn/viz/lidar/walls']['visible']
         )
 
+    def test_precision_landing_profile_selects_pinned_upstream_assets(self):
+        profile = self._profile('x500-precision-land')
+        ros_environment = profile['services']['ros-viz']['environment']
+        px4_environment = profile['services']['px4-sitl']['environment']
+        self.assertEqual(ros_environment['DRN_PROFILE_CAPABILITIES'], 'precision-landing')
+        self.assertEqual(ros_environment['DRN_SIM_MODEL_NAME'], 'x500_mono_cam_down_0')
+        self.assertEqual(ros_environment['PX4_GZ_WORLD'], 'aruco')
+        self.assertEqual(px4_environment['PX4_SIM_MODEL'], 'gz_x500_mono_cam_down')
+        self.assertEqual(px4_environment['PX4_GZ_WORLD'], 'aruco')
+
+        software_path = (
+            REPO_ROOT / 'profiles' / 'x500-precision-land' / 'compose.software.yaml'
+        )
+        software = yaml.safe_load(software_path.read_text(encoding='utf-8'))
+        mount = software['services']['px4-sitl']['volumes'][0]
+        self.assertTrue(mount['read_only'])
+        self.assertEqual(
+            mount['target'],
+            '/opt/PX4-Autopilot/Tools/simulation/gz/models/mono_cam/model.sdf',
+        )
+        model = (
+            REPO_ROOT
+            / 'profiles'
+            / 'x500-precision-land'
+            / 'models'
+            / 'mono_cam'
+            / 'model.sdf'
+        ).read_text(encoding='utf-8')
+        self.assertIn('<width>640</width>', model)
+        self.assertIn('<height>480</height>', model)
+        self.assertIn('<update_rate>15</update_rate>', model)
+
+    def test_precision_landing_components_share_a_stable_inert_contract(self):
+        launch = (REPO_ROOT / 'src/drn_viz/launch/visualize.launch.py').read_text(
+            encoding='utf-8'
+        )
+        detector = (
+            REPO_ROOT / 'src/drn_viz/src/landing_target_detector.cpp'
+        ).read_text(encoding='utf-8')
+        controller = (
+            REPO_ROOT / 'src/drn_control/src/control_node.cpp'
+        ).read_text(encoding='utf-8')
+        smoke = (
+            REPO_ROOT / 'scripts/docker/precision-landing-smoke.py'
+        ).read_text(encoding='utf-8')
+        for topic in (
+            '/drn/sensors/landing/image_raw',
+            '/drn/sensors/landing/camera_info',
+        ):
+            self.assertIn(topic, launch)
+            self.assertIn(topic, smoke)
+        for topic in (
+            '/drn/sensors/landing/target_pose',
+            '/drn/sensors/landing/visible',
+        ):
+            self.assertIn(topic, detector)
+            self.assertIn(topic, smoke)
+        self.assertIn('/drn/sensors/landing/target_pose', controller)
+        self.assertIn('/drn/control/precision_land', controller)
+        self.assertIn('/drn/control/precision_land/abort', controller)
+        self.assertIn('ARMING_STATE_DISARMED', smoke)
+
+    def test_precision_landing_layout_is_observation_only(self):
+        path = REPO_ROOT / 'foxglove' / 'drn-simulation-x500-precision-land.json'
+        layout = json.loads(path.read_text(encoding='utf-8'))
+        panels = layout['configById']
+        self.assertEqual(
+            panels['Image!landing']['imageMode']['imageTopic'],
+            '/drn/sensors/landing/debug/image',
+        )
+        self.assertEqual(
+            panels['Image!landing']['imageMode']['calibrationTopic'],
+            '/drn/sensors/landing/camera_info',
+        )
+        self.assertEqual(
+            panels['RawMessages!target']['topicPath'],
+            '/drn/sensors/landing/target_pose',
+        )
+        self.assertFalse(any(panel.startswith('Teleop!') for panel in panels))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -11,12 +11,15 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>geometry_msgs</depend>
+  <depend>cv_bridge</depend>
   <depend>eigen</depend>
   <depend>nav_msgs</depend>
+  <depend>libopencv-dev</depend>
   <depend>px4_msgs</depend>
   <depend>px4_ros_com</depend>
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>
 

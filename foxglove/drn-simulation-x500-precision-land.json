@@ -1,0 +1,87 @@
+{
+  "configById": {
+    "3D!precisionLand": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 8,
+        "phi": 45,
+        "thetaOffset": 135,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "ignoreColladaUpAxis": true
+      },
+      "transforms": {
+        "frame:map": {"visible": true},
+        "frame:base_link": {"visible": true},
+        "frame:landing_camera_optical": {"visible": true}
+      },
+      "topics": {
+        "/robot_description": {"visible": true},
+        "/drn/sensors/landing/target_pose": {"visible": true}
+      },
+      "layers": {},
+      "publish": {},
+      "imageMode": {},
+      "foxglovePanelTitle": "Precision Landing Simulation"
+    },
+    "Image!landing": {
+      "cameraState": {},
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {},
+      "imageMode": {
+        "imageTopic": "/drn/sensors/landing/debug/image",
+        "calibrationTopic": "/drn/sensors/landing/camera_info"
+      },
+      "foxglovePanelTitle": "Downward Camera and Target"
+    },
+    "RawMessages!target": {
+      "topicPath": "/drn/sensors/landing/target_pose",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Landing Target Pose"
+    },
+    "RawMessages!controlStatus": {
+      "topicPath": "/drn/control/status",
+      "diffEnabled": false,
+      "fontSize": 14,
+      "foxglovePanelTitle": "Control Status"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime",
+    "timeDisplayMethod": "ROS"
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!precisionLand",
+    "second": {
+      "direction": "column",
+      "first": "Image!landing",
+      "second": {
+        "direction": "row",
+        "first": "RawMessages!target",
+        "second": "RawMessages!controlStatus",
+        "splitPercentage": 50
+      },
+      "splitPercentage": 65
+    },
+    "splitPercentage": 50
+  }
+}
