@@ -1,9 +1,10 @@
 # DRN Control
 
 `drn_control` is a thin operator-facing adapter around the official
-`px4_ros2_cpp` control interface for PX4 v1.17. It registers one external mode
-named `DRN Control`; it does not publish a hand-written offboard heartbeat or
-duplicate PX4 command acknowledgement and retry logic.
+`px4_ros2_cpp` control interface for PX4 v1.17. It registers the
+operator-selected `DRN Control` mode and a separately scheduled `DRN Precision
+Land` mode; it does not publish a hand-written offboard heartbeat or duplicate
+PX4 command acknowledgement and retry logic.
 
 The node is inert at startup. An operator must either select `DRN Control` in
 QGroundControl or call `/drn/control/activate` while disarmed before any flight
@@ -22,6 +23,9 @@ request is accepted. Takeoff uses PX4 preflight checks before arming.
 | `/drn/control/hold` | `std_srvs/srv/Trigger` | Hold the current local position |
 | `/drn/control/land` | `std_srvs/srv/Trigger` | Enter PX4 Land and wait for disarm |
 | `/drn/control/rtl` | `std_srvs/srv/Trigger` | Enter PX4 Return and wait for disarm |
+| `/drn/control/precision_land` | `std_srvs/srv/Trigger` | Start target-relative landing from armed Hold |
+| `/drn/control/precision_land/abort` | `std_srvs/srv/Trigger` | Cancel precision landing and return to Hold |
+| `/drn/sensors/landing/target_pose` | `geometry_msgs/msg/PoseStamped` | Marker position in `landing_camera_optical`; motion pauses after 0.5 s without an update and aborts after 3 s |
 
 Setpoints are accepted only while the external mode is active and armed. The
 adapter converts ROS ENU positions and yaw to PX4 NED using the interface
@@ -53,12 +57,27 @@ The launch file respawns the control process if PX4 is not available yet or the
 interface watchdog stops the process after an FMU disconnect. This preserves
 the upstream watchdog rather than bypassing its safety behavior.
 
+## Precision-landing safety behavior
+
+The precision-landing request is accepted only while armed, while `DRN
+Control` is actively holding, and while the target and PX4 attitude are fresh.
+It converts the downward optical-frame translation to body FRD and then NED,
+limits horizontal velocity, requires continuous alignment before descending,
+and pauses descent if alignment degrades. At 0.6 metres it hands the final
+touchdown and disarm to PX4 Land. A stale or invalid target completes the landing mode as failed
+and schedules DRN Control Hold; there is no autonomous search behavior.
+
+Hold, Land, RTL, and the dedicated abort service can preempt precision landing.
+The mode never activates DRN Control, arms, or takes off. Its target detector
+and profile may start automatically because they are observation-only; an
+operator remains responsible for every armed SITL step.
+
 ## Current scope and upstream constraints
 
 - The PX4 ROS 2 Control Interface is still documented as experimental. This
   package pins its `release/1.17` branch to the exact commit built with PX4
   v1.17 and `px4_msgs` v1.17.
-- Only one external mode is registered. This stays below the PX4 v1.17
+- Only two external modes are registered. This stays below the PX4 v1.17
   `ArmingCheckReply` queue-overflow case reported when more than four custom
   modes are registered.
 - `drn_control` remains single-vehicle and is not launched by the observation-
@@ -69,8 +88,9 @@ the upstream watchdog rather than bypassing its safety behavior.
   library's cancellation path.
 - Automated smoke tests verify registration, status, services, odometry, TF,
   Teleop subscriptions, and Foxglove without arming. Takeoff, mouse movement,
-  setpoint tracking, command-loss Hold, Land, RTL, and PX4 restart recovery
-  still require an explicit operator-in-the-loop SITL test.
+  setpoint tracking, command-loss Hold, precision landing and abort, Land, RTL,
+  and PX4 restart recovery still require an explicit operator-in-the-loop SITL
+  test.
 
 Relevant upstream tracking:
 

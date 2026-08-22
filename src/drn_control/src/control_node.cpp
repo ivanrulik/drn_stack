@@ -31,6 +31,7 @@
 #include <utility>
 
 #include <drn_control/pose_conversion.hpp>
+#include <drn_control/precision_landing_control.hpp>
 #include <drn_control/teleop_control.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -40,8 +41,11 @@
 #include <px4_ros2/components/mode.hpp>
 #include <px4_ros2/components/mode_executor.hpp>
 #include <px4_ros2/components/node_with_mode.hpp>
+#include <px4_ros2/control/setpoint_types/experimental/trajectory.hpp>
 #include <px4_ros2/control/setpoint_types/multicopter/goto.hpp>
+#include <px4_ros2/odometry/attitude.hpp>
 #include <px4_ros2/odometry/local_position.hpp>
+#include <px4_ros2/vehicle_state/land_detected.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -57,6 +61,8 @@ constexpr char kStatusTopic[] = "/drn/control/status";
 constexpr char kSetpointTopic[] = "/drn/control/setpoint";
 constexpr char kHorizontalTeleopTopic[] = "/drn/control/teleop/xy";
 constexpr char kVerticalYawTeleopTopic[] = "/drn/control/teleop/z_yaw";
+constexpr char kPrecisionLandingModeName[] = "DRN Precision Land";
+constexpr char kLandingTargetTopic[] = "/drn/sensors/landing/target_pose";
 
 float positiveParameter(rclcpp::Node & node, const std::string & name, double default_value)
 {
@@ -68,6 +74,223 @@ float positiveParameter(rclcpp::Node & node, const std::string & name, double de
 }
 
 }  // namespace
+
+class PrecisionLandingMode : public px4_ros2::ModeBase
+{
+public:
+  explicit PrecisionLandingMode(rclcpp::Node & node)
+  : ModeBase(node, Settings{kPrecisionLandingModeName}),
+    target_command_timeout_s_(
+      positiveParameter(node, "precision_land.target_command_timeout_s", 0.5)),
+    target_timeout_s_(positiveParameter(node, "precision_land.target_timeout_s", 3.0)),
+    min_target_distance_m_(
+      positiveParameter(node, "precision_land.min_target_distance_m", 0.05)),
+    max_target_distance_m_(
+      positiveParameter(node, "precision_land.max_target_distance_m", 20.0)),
+    alignment_dwell_s_(
+      positiveParameter(node, "precision_land.alignment_dwell_s", 0.5)),
+    landing_handoff_height_m_(
+      positiveParameter(node, "precision_land.landing_handoff_height_m", 0.6)),
+    realign_tolerance_m_(
+      positiveParameter(node, "precision_land.realign_tolerance_m", 0.3)),
+    camera_position_body_frd_m_{
+      static_cast<float>(node.declare_parameter<double>(
+        "precision_land.camera_x_body_frd_m", 0.0)),
+      static_cast<float>(node.declare_parameter<double>(
+        "precision_land.camera_y_body_frd_m", 0.0)),
+      static_cast<float>(node.declare_parameter<double>(
+        "precision_land.camera_z_body_frd_m", -0.1))}
+  {
+    config_.horizontal_gain =
+      positiveParameter(node, "precision_land.horizontal_gain", 0.8);
+    config_.max_horizontal_speed_m_s =
+      positiveParameter(node, "precision_land.max_horizontal_speed_m_s", 0.6);
+    config_.descent_speed_m_s =
+      positiveParameter(node, "precision_land.descent_speed_m_s", 0.3);
+    config_.alignment_tolerance_m =
+      positiveParameter(node, "precision_land.alignment_tolerance_m", 0.15);
+    if (!camera_position_body_frd_m_.allFinite()) {
+      throw std::invalid_argument("precision landing camera position must be finite");
+    }
+    if (realign_tolerance_m_ < config_.alignment_tolerance_m) {
+      throw std::invalid_argument(
+              "precision_land.realign_tolerance_m must be at least the alignment tolerance");
+    }
+    if (target_command_timeout_s_ >= target_timeout_s_) {
+      throw std::invalid_argument(
+              "precision_land.target_command_timeout_s must be less than the target timeout");
+    }
+
+    trajectory_setpoint_ =
+      std::make_shared<px4_ros2::TrajectorySetpointType>(*this);
+    attitude_ = std::make_shared<px4_ros2::OdometryAttitude>(*this);
+    land_detected_ = std::make_shared<px4_ros2::LandDetected>(*this);
+    status_publisher_ = node.create_publisher<std_msgs::msg::String>(
+      kStatusTopic, rclcpp::QoS(1).reliable().transient_local());
+    target_subscription_ = node.create_subscription<geometry_msgs::msg::PoseStamped>(
+      kLandingTargetTopic,
+      rclcpp::SensorDataQoS(),
+      [this](geometry_msgs::msg::PoseStamped::ConstSharedPtr message) {
+        receiveTarget(*message);
+      });
+  }
+
+  bool targetReady()
+  {
+    if (!target_optical_m_.has_value() || !targetFresh(target_timeout_s_) ||
+      !attitude_->lastValid())
+    {
+      return false;
+    }
+    const Eigen::Quaternionf attitude = attitude_->attitude();
+    return attitude.coeffs().allFinite() && attitude.norm() > 1.0e-6F;
+  }
+
+  void onActivate() override
+  {
+    descending_ = false;
+    aligned_since_.reset();
+    waiting_for_target_ = false;
+    yaw_ned_rad_ = attitude_->lastValid() ?
+      std::optional<float>{attitude_->yaw()} : std::nullopt;
+    publishStatus("precision_landing_aligning");
+  }
+
+  void onDeactivate() override
+  {
+    aligned_since_.reset();
+    descending_ = false;
+    waiting_for_target_ = false;
+  }
+
+  void updateSetpoint(float) override
+  {
+    if (land_detected_->lastValid() && land_detected_->landed()) {
+      publishStatus("precision_landing_touchdown");
+      completed(px4_ros2::Result::Success);
+      return;
+    }
+    if (!targetReady()) {
+      publishStatus("error: precision landing target lost");
+      completed(px4_ros2::Result::ModeFailureOther);
+      return;
+    }
+    if (!targetFresh(target_command_timeout_s_)) {
+      waiting_for_target_ = true;
+      publishStatus("precision_landing_waiting_for_target");
+      trajectory_setpoint_->update(Eigen::Vector3f::Zero(), {}, yaw_ned_rad_);
+      return;
+    }
+    if (waiting_for_target_) {
+      waiting_for_target_ = false;
+      publishStatus(
+        descending_ ? "precision_landing_descending" : "precision_landing_aligning");
+    }
+
+    const Eigen::Vector3f target_body_frd = opticalTargetToBodyFrd(
+      *target_optical_m_, camera_position_body_frd_m_);
+    const Eigen::Vector3f target_ned = bodyFrdTargetToNed(
+      target_body_frd, attitude_->attitude());
+    const float horizontal_error_m = target_ned.head<2>().norm();
+    const rclcpp::Time now = node().get_clock()->now();
+
+    if (descending_ && horizontal_error_m > realign_tolerance_m_) {
+      descending_ = false;
+      aligned_since_.reset();
+      publishStatus("precision_landing_realigning");
+    }
+    if (!descending_) {
+      if (horizontal_error_m <= config_.alignment_tolerance_m) {
+        if (!aligned_since_.has_value()) {
+          aligned_since_ = now;
+        } else if ((now - *aligned_since_).seconds() >= alignment_dwell_s_) {
+          descending_ = true;
+          publishStatus("precision_landing_descending");
+        }
+      } else {
+        aligned_since_.reset();
+      }
+    }
+
+    const auto command = precisionLandingCommand(target_ned, descending_, config_);
+    if (descending_ && command.aligned &&
+      target_ned.z() <= landing_handoff_height_m_)
+    {
+      publishStatus("precision_landing_handoff");
+      completed(px4_ros2::Result::Success);
+      return;
+    }
+    trajectory_setpoint_->update(command.velocity_ned_m_s, {}, yaw_ned_rad_);
+  }
+
+private:
+  void receiveTarget(const geometry_msgs::msg::PoseStamped & message)
+  {
+    if (message.header.frame_id != "landing_camera_optical") {
+      RCLCPP_WARN_THROTTLE(
+        node().get_logger(), *node().get_clock(), 2000,
+        "Ignoring landing target in frame '%s'", message.header.frame_id.c_str());
+      return;
+    }
+    const Eigen::Vector3f target{
+      static_cast<float>(message.pose.position.x),
+      static_cast<float>(message.pose.position.y),
+      static_cast<float>(message.pose.position.z)};
+    if (!validPrecisionLandingTarget(
+        target, min_target_distance_m_, max_target_distance_m_))
+    {
+      RCLCPP_WARN_THROTTLE(
+        node().get_logger(), *node().get_clock(), 2000,
+        "Ignoring invalid landing target pose");
+      return;
+    }
+    target_optical_m_ = target;
+    target_received_at_ = node().get_clock()->now();
+  }
+
+  bool targetFresh(float timeout_s)
+  {
+    if (!target_received_at_.has_value()) {
+      return false;
+    }
+    const rclcpp::Duration age = node().get_clock()->now() - *target_received_at_;
+    return precisionLandingTargetFresh(age.seconds(), timeout_s);
+  }
+
+  void publishStatus(const std::string & status)
+  {
+    if (status == last_status_) {
+      return;
+    }
+    last_status_ = status;
+    std_msgs::msg::String message;
+    message.data = status;
+    status_publisher_->publish(message);
+    RCLCPP_INFO(node().get_logger(), "Control status: %s", status.c_str());
+  }
+
+  PrecisionLandingConfig config_;
+  const float target_command_timeout_s_;
+  const float target_timeout_s_;
+  const float min_target_distance_m_;
+  const float max_target_distance_m_;
+  const float alignment_dwell_s_;
+  const float landing_handoff_height_m_;
+  const float realign_tolerance_m_;
+  const Eigen::Vector3f camera_position_body_frd_m_;
+  std::shared_ptr<px4_ros2::TrajectorySetpointType> trajectory_setpoint_;
+  std::shared_ptr<px4_ros2::OdometryAttitude> attitude_;
+  std::shared_ptr<px4_ros2::LandDetected> land_detected_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_publisher_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr target_subscription_;
+  std::optional<Eigen::Vector3f> target_optical_m_;
+  std::optional<rclcpp::Time> target_received_at_;
+  std::optional<rclcpp::Time> aligned_since_;
+  std::optional<float> yaw_ned_rad_;
+  std::string last_status_;
+  bool descending_{false};
+  bool waiting_for_target_{false};
+};
 
 class DrnControlMode : public px4_ros2::ModeBase
 {
@@ -384,11 +607,14 @@ private:
 class DrnControlExecutor : public px4_ros2::ModeExecutorBase
 {
 public:
-  explicit DrnControlExecutor(DrnControlMode & owned_mode)
+  DrnControlExecutor(
+    DrnControlMode & owned_mode,
+    PrecisionLandingMode & precision_landing_mode)
   : ModeExecutorBase(
       Settings{}.activate(Settings::Activation::ActivateAlways),
       owned_mode),
     mode_(owned_mode),
+    precision_landing_mode_(precision_landing_mode),
     node_(owned_mode.node())
   {
     vehicle_command_client_ =
@@ -418,6 +644,16 @@ public:
       [this](std_srvs::srv::Trigger::Response & response) {
         requestRtl(response);
       });
+    precision_land_service_ = createTriggerService(
+      "/drn/control/precision_land",
+      [this](std_srvs::srv::Trigger::Response & response) {
+        requestPrecisionLand(response);
+      });
+    precision_land_abort_service_ = createTriggerService(
+      "/drn/control/precision_land/abort",
+      [this](std_srvs::srv::Trigger::Response & response) {
+        requestPrecisionLandAbort(response);
+      });
 
     // NodeWithModeExecutor spins only after registration completes, so this
     // one-shot timer turns the constructor's startup status into a confirmed
@@ -440,6 +676,7 @@ public:
   {
     ++generation_;
     operation_ = Operation::Idle;
+    precision_landing_in_progress_ = false;
     mode_.publishStatus(isArmed() ? "ready_armed" : "ready_disarmed");
   }
 
@@ -447,6 +684,7 @@ public:
   {
     ++generation_;
     operation_ = Operation::Idle;
+    precision_landing_in_progress_ = false;
     mode_.publishStatus(
       reason == DeactivateReason::FailsafeActivated ?
       "inactive: failsafe activated" :
@@ -460,6 +698,7 @@ private:
     Activating,
     Arming,
     TakingOff,
+    PrecisionLanding,
     Landing,
     Returning
   };
@@ -625,11 +864,17 @@ private:
       response.message = "Hold requires an armed vehicle";
       return;
     }
-    if (!beginRequest(Operation::Idle, response)) {
+    if (operation_ != Operation::Idle &&
+      !(precision_landing_in_progress_ && precisionLandingCanBePreemptedBy(
+        PrecisionLandingAction::Hold)))
+    {
+      response.success = false;
+      response.message = "Another control operation is already in progress";
       return;
     }
 
     const std::uint64_t generation = ++generation_;
+    precision_landing_in_progress_ = false;
     if (mode_.isActive()) {
       mode_.cancelTeleopInput();
       if (!mode_.captureCurrentTarget()) {
@@ -639,9 +884,93 @@ private:
         return;
       }
       mode_.publishStatus("holding");
+      response.success = true;
+      response.message = "Holding current position";
       return;
     }
     scheduleHold(generation);
+    response.success = true;
+    response.message = "Switching to hold";
+  }
+
+  void requestPrecisionLand(TriggerResponse & response)
+  {
+    if (!isArmed()) {
+      response.success = false;
+      response.message = "Precision landing requires an armed vehicle";
+      return;
+    }
+    if (!mode_.isActive()) {
+      response.success = false;
+      response.message = "Activate DRN Control and hold before precision landing";
+      return;
+    }
+    if (!precision_landing_mode_.targetReady()) {
+      response.success = false;
+      response.message = "A fresh landing target and vehicle attitude are required";
+      return;
+    }
+    if (!beginRequest(Operation::PrecisionLanding, response)) {
+      return;
+    }
+
+    mode_.cancelTeleopInput();
+    const std::uint64_t generation = ++generation_;
+    precision_landing_in_progress_ = true;
+    mode_.publishStatus("precision_landing_requested");
+    scheduleMode(
+      precision_landing_mode_.id(),
+      [this, generation](px4_ros2::Result result) {
+        if (!isCurrent(generation)) {
+          return;
+        }
+        if (result == px4_ros2::Result::Success) {
+          startLandingHandoff(generation);
+          return;
+        }
+        precision_landing_in_progress_ = false;
+        operation_ = Operation::Idle;
+        mode_.publishStatus(
+          "precision_landing_aborted: " +
+          std::string(px4_ros2::resultToString(result)));
+        scheduleHold(generation);
+      });
+  }
+
+  void startLandingHandoff(std::uint64_t generation)
+  {
+    operation_ = Operation::Landing;
+    mode_.publishStatus("precision_landing_px4_land");
+    land(
+      [this, generation](px4_ros2::Result result) {
+        if (!isCurrent(generation)) {
+          return;
+        }
+        if (result != px4_ros2::Result::Success) {
+          finishWithResult("precision landing handoff", result);
+          return;
+        }
+        waitForDisarm(generation, "precision_landing_complete");
+      });
+  }
+
+  void requestPrecisionLandAbort(TriggerResponse & response)
+  {
+    if (!precision_landing_in_progress_ || !precisionLandingCanBePreemptedBy(
+        PrecisionLandingAction::Abort))
+    {
+      response.success = false;
+      response.message = "Precision landing is not active";
+      return;
+    }
+
+    const std::uint64_t generation = ++generation_;
+    precision_landing_in_progress_ = false;
+    operation_ = Operation::Idle;
+    mode_.publishStatus("precision_landing_aborting");
+    scheduleHold(generation);
+    response.success = true;
+    response.message = "Precision landing aborted; switching to hold";
   }
 
   void scheduleHold(std::uint64_t generation)
@@ -667,10 +996,22 @@ private:
       response.message = "Vehicle is already disarmed";
       return;
     }
-    if (!beginRequest(Operation::Landing, response)) {
+    if (operation_ == Operation::Landing && precision_landing_in_progress_) {
+      response.success = true;
+      response.message = "PX4 landing is already in progress";
+      return;
+    }
+    if (operation_ != Operation::Idle &&
+      !(precision_landing_in_progress_ && precisionLandingCanBePreemptedBy(
+        PrecisionLandingAction::Land)))
+    {
+      response.success = false;
+      response.message = "Another control operation is already in progress";
       return;
     }
 
+    operation_ = Operation::Landing;
+    precision_landing_in_progress_ = false;
     mode_.cancelTeleopInput();
     const std::uint64_t generation = ++generation_;
     mode_.publishStatus("landing");
@@ -685,6 +1026,8 @@ private:
         }
         waitForDisarm(generation, "landed");
       });
+    response.success = true;
+    response.message = "Land requested; monitor /drn/control/status";
   }
 
   void requestRtl(TriggerResponse & response)
@@ -694,10 +1037,17 @@ private:
       response.message = "Vehicle is already disarmed";
       return;
     }
-    if (!beginRequest(Operation::Returning, response)) {
+    if (operation_ != Operation::Idle &&
+      !(precision_landing_in_progress_ && precisionLandingCanBePreemptedBy(
+        PrecisionLandingAction::Rtl)))
+    {
+      response.success = false;
+      response.message = "Another control operation is already in progress";
       return;
     }
 
+    operation_ = Operation::Returning;
+    precision_landing_in_progress_ = false;
     mode_.cancelTeleopInput();
     const std::uint64_t generation = ++generation_;
     mode_.publishStatus("returning_to_launch");
@@ -712,6 +1062,8 @@ private:
         }
         waitForDisarm(generation, "rtl_complete");
       });
+    response.success = true;
+    response.message = "RTL requested; monitor /drn/control/status";
   }
 
   void waitForDisarm(std::uint64_t generation, const std::string & final_status)
@@ -723,6 +1075,7 @@ private:
           return;
         }
         operation_ = Operation::Idle;
+        precision_landing_in_progress_ = false;
         if (result == px4_ros2::Result::Success) {
           mode_.publishStatus(final_status);
         } else {
@@ -739,15 +1092,18 @@ private:
   void finishWithResult(const std::string & operation, px4_ros2::Result result)
   {
     operation_ = Operation::Idle;
+    precision_landing_in_progress_ = false;
     const std::string status =
       "error: " + operation + " " + px4_ros2::resultToString(result);
     mode_.publishStatus(status);
   }
 
   DrnControlMode & mode_;
+  PrecisionLandingMode & precision_landing_mode_;
   rclcpp::Node & node_;
   Operation operation_{Operation::Idle};
   std::uint64_t generation_{0};
+  bool precision_landing_in_progress_{false};
 
   rclcpp::Client<px4_msgs::srv::VehicleCommand>::SharedPtr vehicle_command_client_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr activate_service_;
@@ -755,11 +1111,14 @@ private:
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr hold_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr land_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr rtl_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr precision_land_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr precision_land_abort_service_;
   rclcpp::TimerBase::SharedPtr registration_status_timer_;
 };
 
 using DrnControlNode =
-  px4_ros2::NodeWithModeExecutor<DrnControlExecutor, DrnControlMode>;
+  px4_ros2::NodeWithModeExecutor<
+  DrnControlExecutor, DrnControlMode, PrecisionLandingMode>;
 
 }  // namespace drn_control
 

@@ -60,6 +60,13 @@ Use the 270-degree 2D LiDAR profile for laser-scan consumers:
 .\scripts\run-sim.ps1 -Profile x500-lidar
 ```
 
+Use the operator-gated precision-landing profile for the downward camera and
+ArUco landing workflow:
+
+```powershell
+.\scripts\run-sim.ps1 -Profile x500-precision-land
+```
+
 Use the inert bounded fleet profile for namespace, routing, and observation
 tests. It defaults to two vehicles and supports an explicitly requested count
 through four:
@@ -69,7 +76,7 @@ through four:
 .\scripts\run-sim.ps1 -Profile x500-multi -VehicleCount 4
 ```
 
-The depth and LiDAR profiles automatically use a GPU only when Docker can
+The depth, LiDAR, and precision-landing profiles automatically use a GPU only when Docker can
 initialize a hardware EGL renderer for Gazebo. Otherwise they select balanced
 software-rendering sensor rates; depth also uses a 640 x 360 color stream.
 WSLg/D3D12 graphics bridging is intentionally outside the supported host
@@ -95,6 +102,10 @@ bash ./scripts/run-sim.sh --profile x500-lidar
 ```
 
 ```bash
+bash ./scripts/run-sim.sh --profile x500-precision-land
+```
+
+```bash
 bash ./scripts/run-sim.sh --profile x500-multi
 bash ./scripts/run-sim.sh --profile x500-multi --vehicle-count 4
 ```
@@ -108,6 +119,7 @@ When the readiness checks pass:
 - PX4 odometry: `/fmu/out/vehicle_odometry`
 - Simulated vision odometry with `x500-vio`: `/drn/sensors/vision/odometry`
 - 2D LiDAR with `x500-lidar`: `/drn/sensors/lidar/scan`
+- Landing target with `x500-precision-land`: `/drn/sensors/landing/target_pose`
 - Fleet odometry with `x500-multi`: `/px4_<instance>/fmu/out/vehicle_odometry`
   for each requested instance from `1` through the fleet size
 - DRN control status: `/drn/control/status`
@@ -125,6 +137,7 @@ Gazebo runs headless. Use Foxglove on the host for 3D visualization.
 | Start x500 with depth camera | `.\scripts\run-sim.ps1 -Profile x500-depth` | `bash ./scripts/run-sim.sh --profile x500-depth` |
 | Start x500 with simulated vision odometry | `.\scripts\run-sim.ps1 -Profile x500-vio` | `bash ./scripts/run-sim.sh --profile x500-vio` |
 | Start x500 with 2D LiDAR | `.\scripts\run-sim.ps1 -Profile x500-lidar` | `bash ./scripts/run-sim.sh --profile x500-lidar` |
+| Start x500 with precision landing | `.\scripts\run-sim.ps1 -Profile x500-precision-land` | `bash ./scripts/run-sim.sh --profile x500-precision-land` |
 | Start two inert namespaced x500s | `.\scripts\run-sim.ps1 -Profile x500-multi` | `bash ./scripts/run-sim.sh --profile x500-multi` |
 | Start four inert namespaced x500s | `.\scripts\run-sim.ps1 -Profile x500-multi -VehicleCount 4` | `bash ./scripts/run-sim.sh --profile x500-multi --vehicle-count 4` |
 | Show health and topic status | `.\scripts\status.ps1` | `bash ./scripts/status.sh` |
@@ -305,6 +318,27 @@ To fly in SITL:
    .\scripts\run.ps1 ros2 service call /drn/control/rtl std_srvs/srv/Trigger '{}'
    ```
 
+For precision landing, start `x500-precision-land`, complete the same explicit
+activation and takeoff steps, place the vehicle where marker `0` is visible in
+the downward camera, then call:
+
+```powershell
+.\scripts\run.ps1 ros2 service call /drn/control/precision_land std_srvs/srv/Trigger '{}'
+```
+
+The request is rejected unless the vehicle is armed, DRN Control is holding,
+and a fresh target pose exists. Target loss stops descent and returns to Hold.
+Observations older than 0.5 seconds pause motion, while a three-second absence
+is treated as target loss so slower software-rendered simulations remain safe.
+The operator can interrupt with Hold, Land, RTL, or the dedicated abort service:
+
+```powershell
+.\scripts\run.ps1 ros2 service call /drn/control/precision_land/abort std_srvs/srv/Trigger '{}'
+```
+
+This bounded SITL feature does not search for the marker. Automated checks
+never arm, take off, or exercise the descent.
+
 The complete topic and service contract, input validation, and recovery
 behavior are documented in
 [`src/drn_control/README.md`](src/drn_control/README.md).
@@ -361,6 +395,11 @@ For `x500-multi`, import
 [`foxglove/drn-simulation-x500-multi.json`](foxglove/drn-simulation-x500-multi.json).
 It shows two isolated TF trees, namespaced odometry plots, and both disarmed
 vehicle-status streams. Fleet mode exposes no DRN control or Teleop endpoints.
+
+For `x500-precision-land`, import
+[`foxglove/drn-simulation-x500-precision-land.json`](foxglove/drn-simulation-x500-precision-land.json).
+It shows the annotated downward camera, target pose, and control status without
+adding Teleop panels.
 
 The default layout includes:
 

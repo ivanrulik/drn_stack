@@ -62,6 +62,13 @@ if(BUILD_TESTING)
   target_include_directories(test_teleop_control PRIVATE include)
   ament_target_dependencies(test_teleop_control geometry_msgs)
   target_link_libraries(test_teleop_control Eigen3::Eigen)
+
+  ament_add_gtest(
+    test_precision_landing_control
+    test/test_precision_landing_control.cpp
+  )
+  target_include_directories(test_precision_landing_control PRIVATE include)
+  target_link_libraries(test_precision_landing_control Eigen3::Eigen)
 endif()
 
 ament_package()

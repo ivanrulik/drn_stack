@@ -14,6 +14,8 @@ The package:
   airframe name.
 - Normalizes simulated vision odometry to `map` -> `base_link` in ENU/FLU.
 - Bridges rendered 2D LiDAR through a stable `lidar_link` LaserScan contract.
+- Detects the pinned ArUco landing target from a downward camera and publishes
+  a stable optical-frame pose without commanding PX4.
 - Generates isolated TF and robot-model observation paths for two to four
   namespaced x500 instances in the bounded fleet profile.
 
@@ -86,3 +88,10 @@ rendered scan on an internal topic. `laser_scan_adapter` republishes it as
 `/drn/sensors/lidar/scan` with the stable `lidar_link` frame, while the launch
 file publishes `base_link -> lidar_link`. It does not enable collision
 prevention or publish vehicle commands.
+
+With the `precision-landing` capability, `ros_gz_bridge` publishes the selected
+model's downward image and calibration under `/drn/sensors/landing/`.
+`landing_target_detector` detects marker `0`, publishes visibility and a
+`landing_camera_optical` target pose, and provides an annotated image for
+Foxglove. The launch file also publishes the fixed camera transform. Detection
+is observation-only; the separate control service remains operator-gated.

@@ -43,7 +43,12 @@ def _launch_setup(context, *args, **kwargs):
         raise RuntimeError(f"Invalid DRN profile name: {profile}")
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]*', airframe):
         raise RuntimeError(f"Invalid DRN airframe name: {airframe}")
-    supported_capabilities = {'depth-camera', 'laser-scan', 'vision-odometry'}
+    supported_capabilities = {
+        'depth-camera',
+        'laser-scan',
+        'precision-landing',
+        'vision-odometry',
+    }
     unknown_capabilities = capabilities - supported_capabilities
     if unknown_capabilities:
         raise RuntimeError(
@@ -78,7 +83,11 @@ def _launch_setup(context, *args, **kwargs):
                         r'^/drn/control/teleop/z_yaw$',
                     ],
                     'service_whitelist': [
-                        r'^/drn/control/(activate|takeoff|hold|land|rtl)$',
+                        (
+                            r'^/drn/control/'
+                            r'(activate|takeoff|hold|land|rtl|precision_land'
+                            r'(/abort)?)$'
+                        ),
                     ],
                 }
             ],
@@ -170,6 +179,61 @@ def _launch_setup(context, *args, **kwargs):
                     '--yaw', '-1.57079632679',
                     '--frame-id', base_frame,
                     '--child-frame-id', 'camera_link',
+                ],
+            ),
+        ])
+
+    if 'precision-landing' in capabilities:
+        landing_image_gz_topic = (
+            f'/world/{world_name}/model/{model_name}/link/camera_link/'
+            'sensor/imager/image'
+        )
+        landing_info_gz_topic = (
+            f'/world/{world_name}/model/{model_name}/link/camera_link/'
+            'sensor/imager/camera_info'
+        )
+        nodes.extend([
+            Node(
+                package='ros_gz_bridge',
+                executable='parameter_bridge',
+                name='landing_camera_bridge',
+                output='screen',
+                arguments=[
+                    f'{landing_image_gz_topic}@sensor_msgs/msg/Image[gz.msgs.Image',
+                    (
+                        f'{landing_info_gz_topic}@sensor_msgs/msg/CameraInfo'
+                        '[gz.msgs.CameraInfo'
+                    ),
+                ],
+                remappings=[
+                    (landing_image_gz_topic, '/drn/sensors/landing/image_raw'),
+                    (landing_info_gz_topic, '/drn/sensors/landing/camera_info'),
+                ],
+            ),
+            Node(
+                package='drn_viz',
+                executable='landing_target_detector',
+                name='landing_target_detector',
+                output='screen',
+                parameters=[{
+                    'marker_id': 0,
+                    'dictionary_id': 2,
+                    'marker_size_m': 0.5,
+                    'publish_debug_image': True,
+                }],
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='landing_camera_tf',
+                output='screen',
+                arguments=[
+                    '--x', '0', '--y', '0', '--z', '0.1',
+                    '--roll', '3.14159265359',
+                    '--pitch', '0',
+                    '--yaw', '-1.57079632679',
+                    '--frame-id', base_frame,
+                    '--child-frame-id', 'landing_camera_optical',
                 ],
             ),
         ])

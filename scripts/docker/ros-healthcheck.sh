@@ -43,6 +43,10 @@ if has_capability laser-scan; then
   ros2 node list 2>/dev/null | grep -qx "/laser_scan_adapter"
   ros2 node list 2>/dev/null | grep -qx "/lidar_world_markers"
 fi
+if has_capability precision-landing; then
+  ros2 node list 2>/dev/null | grep -qx "/landing_camera_bridge"
+  ros2 node list 2>/dev/null | grep -qx "/landing_target_detector"
+fi
 port_hex="$(printf '%04X' "${FOXGLOVE_PORT:-8765}")"
 awk -v port=":${port_hex}" '$2 ~ port && $4 == "0A" { found = 1 } END { exit !found }' \
   /proc/net/tcp /proc/net/tcp6
