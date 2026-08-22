@@ -328,6 +328,8 @@ the downward camera, then call:
 
 The request is rejected unless the vehicle is armed, DRN Control is holding,
 and a fresh target pose exists. Target loss stops descent and returns to Hold.
+Observations older than 0.5 seconds pause motion, while a three-second absence
+is treated as target loss so slower software-rendered simulations remain safe.
 The operator can interrupt with Hold, Land, RTL, or the dedicated abort service:
 
 ```powershell

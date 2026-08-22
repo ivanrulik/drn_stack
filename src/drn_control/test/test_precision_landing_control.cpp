@@ -87,6 +87,7 @@ TEST(PrecisionLandingControl, ValidatesTargetBoundsAndFreshness)
 
   EXPECT_TRUE(precisionLandingTargetFresh(0.49, 0.5F));
   EXPECT_FALSE(precisionLandingTargetFresh(0.51, 0.5F));
+  EXPECT_TRUE(precisionLandingTargetFresh(1.8, 3.0F));
   EXPECT_FALSE(precisionLandingTargetFresh(-0.1, 0.5F));
 }
 

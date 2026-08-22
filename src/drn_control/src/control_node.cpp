@@ -80,7 +80,9 @@ class PrecisionLandingMode : public px4_ros2::ModeBase
 public:
   explicit PrecisionLandingMode(rclcpp::Node & node)
   : ModeBase(node, Settings{kPrecisionLandingModeName}),
-    target_timeout_s_(positiveParameter(node, "precision_land.target_timeout_s", 0.5)),
+    target_command_timeout_s_(
+      positiveParameter(node, "precision_land.target_command_timeout_s", 0.5)),
+    target_timeout_s_(positiveParameter(node, "precision_land.target_timeout_s", 3.0)),
     min_target_distance_m_(
       positiveParameter(node, "precision_land.min_target_distance_m", 0.05)),
     max_target_distance_m_(
@@ -114,6 +116,10 @@ public:
       throw std::invalid_argument(
               "precision_land.realign_tolerance_m must be at least the alignment tolerance");
     }
+    if (target_command_timeout_s_ >= target_timeout_s_) {
+      throw std::invalid_argument(
+              "precision_land.target_command_timeout_s must be less than the target timeout");
+    }
 
     trajectory_setpoint_ =
       std::make_shared<px4_ros2::TrajectorySetpointType>(*this);
@@ -131,7 +137,9 @@ public:
 
   bool targetReady()
   {
-    if (!target_optical_m_.has_value() || !targetFresh() || !attitude_->lastValid()) {
+    if (!target_optical_m_.has_value() || !targetFresh(target_timeout_s_) ||
+      !attitude_->lastValid())
+    {
       return false;
     }
     const Eigen::Quaternionf attitude = attitude_->attitude();
@@ -142,6 +150,7 @@ public:
   {
     descending_ = false;
     aligned_since_.reset();
+    waiting_for_target_ = false;
     yaw_ned_rad_ = attitude_->lastValid() ?
       std::optional<float>{attitude_->yaw()} : std::nullopt;
     publishStatus("precision_landing_aligning");
@@ -151,6 +160,7 @@ public:
   {
     aligned_since_.reset();
     descending_ = false;
+    waiting_for_target_ = false;
   }
 
   void updateSetpoint(float) override
@@ -164,6 +174,17 @@ public:
       publishStatus("error: precision landing target lost");
       completed(px4_ros2::Result::ModeFailureOther);
       return;
+    }
+    if (!targetFresh(target_command_timeout_s_)) {
+      waiting_for_target_ = true;
+      publishStatus("precision_landing_waiting_for_target");
+      trajectory_setpoint_->update(Eigen::Vector3f::Zero(), {}, yaw_ned_rad_);
+      return;
+    }
+    if (waiting_for_target_) {
+      waiting_for_target_ = false;
+      publishStatus(
+        descending_ ? "precision_landing_descending" : "precision_landing_aligning");
     }
 
     const Eigen::Vector3f target_body_frd = opticalTargetToBodyFrd(
@@ -227,13 +248,13 @@ private:
     target_received_at_ = node().get_clock()->now();
   }
 
-  bool targetFresh()
+  bool targetFresh(float timeout_s)
   {
     if (!target_received_at_.has_value()) {
       return false;
     }
     const rclcpp::Duration age = node().get_clock()->now() - *target_received_at_;
-    return precisionLandingTargetFresh(age.seconds(), target_timeout_s_);
+    return precisionLandingTargetFresh(age.seconds(), timeout_s);
   }
 
   void publishStatus(const std::string & status)
@@ -249,6 +270,7 @@ private:
   }
 
   PrecisionLandingConfig config_;
+  const float target_command_timeout_s_;
   const float target_timeout_s_;
   const float min_target_distance_m_;
   const float max_target_distance_m_;
@@ -267,6 +289,7 @@ private:
   std::optional<float> yaw_ned_rad_;
   std::string last_status_;
   bool descending_{false};
+  bool waiting_for_target_{false};
 };
 
 class DrnControlMode : public px4_ros2::ModeBase

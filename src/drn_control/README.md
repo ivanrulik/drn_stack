@@ -25,7 +25,7 @@ request is accepted. Takeoff uses PX4 preflight checks before arming.
 | `/drn/control/rtl` | `std_srvs/srv/Trigger` | Enter PX4 Return and wait for disarm |
 | `/drn/control/precision_land` | `std_srvs/srv/Trigger` | Start target-relative landing from armed Hold |
 | `/drn/control/precision_land/abort` | `std_srvs/srv/Trigger` | Cancel precision landing and return to Hold |
-| `/drn/sensors/landing/target_pose` | `geometry_msgs/msg/PoseStamped` | Marker position in `landing_camera_optical` |
+| `/drn/sensors/landing/target_pose` | `geometry_msgs/msg/PoseStamped` | Marker position in `landing_camera_optical`; motion pauses after 0.5 s without an update and aborts after 3 s |
 
 Setpoints are accepted only while the external mode is active and armed. The
 adapter converts ROS ENU positions and yaw to PX4 NED using the interface
