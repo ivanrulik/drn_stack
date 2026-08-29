@@ -302,6 +302,7 @@ function Show-Summary {
         Write-Host "Foxglove layout: foxglove\drn-simulation-$Profile.json"
     }
     Write-Host "QGroundControl: UDP localhost:$QgcPort"
+    Write-Host 'QGC diagnostics: .\scripts\qgc-doctor.ps1'
     Write-Host 'Logs: .\scripts\logs.ps1'
     Write-Host 'Status: .\scripts\status.ps1'
     Write-Host 'Stop: .\scripts\stop.ps1'

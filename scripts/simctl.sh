@@ -211,6 +211,7 @@ print_summary() {
     echo "Foxglove layout: foxglove/drn-simulation-${profile}.json"
   fi
   echo "QGroundControl: UDP localhost:${QGC_PORT:-14550}"
+  echo "QGC diagnostics: ./scripts/qgc-doctor.sh"
   echo "Logs: ./scripts/logs.sh"
   echo "Status: ./scripts/status.sh"
   echo "Stop: ./scripts/stop.sh"

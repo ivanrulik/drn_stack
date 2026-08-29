@@ -366,6 +366,8 @@ or `off` (force balanced software rendering). Detecting a GPU through
 Gazebo actually uses.
 PX4 resolves `QGC_HOST` from inside Docker and sends its GCS MAVLink stream to
 `QGC_PORT`; QGroundControl does not need a remote server entry.
+QGroundControl 5.x normally listens on UDP `14550` through its enabled UDP
+autoconnect setting. The stack does not install, launch, or reconfigure QGC.
 
 ## Foxglove
 
@@ -452,6 +454,40 @@ $env:FOXGLOVE_PORT = "18765"
 $env:QGC_PORT = "14551"
 .\scripts\run-sim.ps1
 ```
+
+### QGroundControl does not connect on Linux
+
+Keep QGroundControl's UDP autoconnect enabled and use the same port configured
+by `QGC_PORT` (default `14550`). Then run the read-only diagnostic:
+
+```bash
+bash ./scripts/qgc-doctor.sh
+```
+
+PX4 sends MAVLink from the DRN Compose network to the Docker host gateway.
+Linux host firewalls such as UFW can therefore reject the packet even when QGC
+is listening correctly. The diagnostic reports the active container address,
+gateway, subnet, UDP listener, and any readable recent UFW drops. When UFW is
+active it prints, but never executes, a rule restricted to the current Docker
+subnet, gateway address, and QGC UDP port.
+
+This behavior follows Docker's documented
+[packet-filtering and UFW interaction](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw).
+QGC's upstream settings define UDP `14550` as its default
+[autoconnect listener](https://github.com/mavlink/qgroundcontrol/blob/master/src/Settings/AutoConnect.SettingsGroup.json).
+
+Review that rule before applying it: every container on the named subnet would
+be trusted to send UDP to that QGC port. Docker can assign a different subnet
+after its network is recreated, so rerun the diagnostic rather than copying an
+old address. Do not use a blanket `ufw disable` or an unrestricted UDP rule.
+
+On Windows, the equivalent read-only listener check is:
+
+```powershell
+.\scripts\qgc-doctor.ps1
+```
+
+Changing QGC versions is not a remedy for a confirmed host-firewall drop.
 
 ### Force a clean project rebuild
 
